@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AWS Cloud Engineer Journey</title><link rel="stylesheet" href="assets/style.css"></head><body data-k="aws-index">
+<header class="top"><div class="wrap"><a href="index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><h1>AWS Cloud Engineer Journey</h1>
+<p>A hands-on path from zero to <b>AWS Certified Cloud Practitioner</b>, then <b>Solutions Architect – Associate</b>, built around real labs you run in your own account. Every day has: a first-principles explanation, a real-life analogy, a diagram, a lab, and an exam-style quiz.</p>
+
+<div class="box why"><b class="t">How the course works</b>
+<ul>
+<li><b>Weekdays:</b> 1–2 hours = one module. <b>Weekends:</b> up to 4 hours = a bigger lab + review.</li>
+<li><b>Rule of thumb:</b> 30% reading, 70% hands-on. If you only read, it won't stick.</li>
+<li>Every lab ends with a <b>cleanup</b> step so you don't get a surprise bill.</li>
+<li>Drop your own console screenshots into <code>evidence/</code> (see each lab). That's your portfolio.</li>
+</ul></div>
+
+<h2>The roadmap (about 20 weeks at your pace)</h2>
+<table>
+<tr><th>Phase</th><th>Weeks</th><th>You will be able to</th><th>Goal</th></tr>
+<tr><td><b>0. Foundations</b><br>(Linux, networking basics)</td><td>done / ongoing</td><td>Use a terminal, run a web server (your <code>nginx-lab</code>), read an IP address and port.</td><td>Comfort</td></tr>
+<tr><td><b>1. Cloud Practitioner</b></td><td>1–4</td><td>Explain cloud, secure an account, use IAM, EC2, S3, VPC basics, pricing and support plans.</td><td><b>CLF-C02</b> exam</td></tr>
+<tr><td><b>2. Architect Associate</b></td><td>5–13</td><td>Design networks (VPC), databases (RDS/DynamoDB), load balancing/auto scaling, serverless, decoupling, DR.</td><td><b>SAA-C03</b> exam</td></tr>
+<tr><td><b>3. Engineer skills</b></td><td>14–20</td><td>Infrastructure as Code (CloudFormation/Terraform), CI/CD, monitoring, a capstone project.</td><td>Portfolio + job-ready</td></tr>
+</table>
+
+<h3>Exam facts (check aws.amazon.com/certification for the latest)</h3>
+<table>
+<tr><th></th><th>Cloud Practitioner (CLF-C02)</th><th>Solutions Architect Associate (SAA-C03)</th></tr>
+<tr><td>Questions / time</td><td>65 / 90 min</td><td>65 / 130 min</td></tr>
+<tr><td>Passing score</td><td>700 / 1000</td><td>720 / 1000</td></tr>
+<tr><td>Fee (approx.)</td><td>USD 100</td><td>USD 150</td></tr>
+<tr><td>Domains</td><td>Cloud concepts 24% · Security 30% · Technology/services 34% · Billing/support 12%</td><td>Secure 30% · Resilient 26% · High-performing 24% · Cost-optimized 20%</td></tr>
+</table>
+<p>Book the CLF-C02 exam at the end of week 4. A booked date is the best motivator. Take SAA-C03 after week 13.</p>
+
+<h2>Weekly rhythm</h2>
+<table>
+<tr><th>Mon–Fri (1–2h)</th><th>Sat (4h)</th><th>Sun (2–4h)</th></tr>
+<tr><td>Read (30 min) → Lab (45 min) → Quiz (15 min)</td><td>Bigger lab / mini-project</td><td>Review quiz, fix weak spots, <b>git commit your progress</b></td></tr>
+</table>
+
+<h2>Modules</h2>
+<h3>Week 1</h3><div class='grid'><a class='card' href='modules/day01.html'><b>Day 1: What Is the Cloud, Really?</b><br><small>Concepts · 1.5h</small></a><a class='card' href='modules/day02.html'><b>Day 2: Create and Lock Down Your AWS Account</b><br><small>Security · Lab · 1.5h</small></a><a class='card' href='modules/day03.html'><b>Day 3: IAM: Who Can Do What</b><br><small>Security · Lab · 2h</small></a><a class='card' href='modules/day04.html'><b>Day 4: Global Infrastructure and the AWS CLI</b><br><small>Concepts · Lab · 1.5h</small></a><a class='card' href='modules/day05.html'><b>Day 5: EC2: Your First Server</b><br><small>Compute · Lab · 2h</small></a><a class='card' href='modules/day06.html'><b>Day 6: S3: Storage That Never Fills Up (Weekend Lab)</b><br><small>Storage · Lab · 3–4h</small></a><a class='card' href='modules/day07.html'><b>Day 7: EBS, Pricing Models and Week 1 Review</b><br><small>Review · Quiz · 2–4h</small></a></div>
+
+<div class="box warn"><b class="t">Before you spend a cent</b>
+Complete <b>Day 2</b> (billing alert + MFA) first. AWS free-tier rules changed in 2025 (new accounts get a credit-based free plan), so always read the current terms at <code>aws.amazon.com/free</code>.</div>
+</main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

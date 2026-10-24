@@ -1,0 +1,72 @@
+<!--meta {"n":5,"title":"EC2: Your First Server","time":"2h","week":1,"tag":"Compute · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Launch a Linux server in the cloud, connect to it with SSH, serve a web page from it, and terminate it safely. You already did this locally in your <code>nginx-lab</code>. Now you'll do it on the internet.</div>
+
+<h2>1. First principles: a server is just a computer you can reach</h2>
+<p><b>EC2 (Elastic Compute Cloud)</b> rents you a virtual computer. Under the hood, AWS slices a powerful physical machine into many isolated virtual machines. You choose:</p>
+<table><tr><th>Choice</th><th>Question it answers</th><th>Analogy</th></tr>
+<tr><td><b>AMI</b></td><td>What OS/software is pre-installed?</td><td>A move-in-ready template: furnished or empty flat</td></tr>
+<tr><td><b>Instance type</b></td><td>How much CPU/RAM?</td><td>Flat size: studio vs 4-bedroom</td></tr>
+<tr><td><b>Key pair</b></td><td>How do I prove I'm allowed in?</td><td>The physical key (the .pem file)</td></tr>
+<tr><td><b>Security group</b></td><td>Which network traffic is allowed in/out?</td><td>The doorman's guest list</td></tr>
+<tr><td><b>Storage (EBS)</b></td><td>Where is my disk?</td><td>The wardrobe</td></tr>
+<tr><td><b>User data</b></td><td>What runs automatically on first boot?</td><td>Cleaners who set up the flat before you arrive</td></tr></table>
+<p>Instance type names decode like <code>t3.micro</code>: family <b>t</b> (burstable general purpose), generation <b>3</b>, size <b>micro</b>. Others: <code>m</code> general, <code>c</code> compute, <code>r</code> memory, <code>i</code> storage, <code>g/p</code> GPU.</p>
+<figure>
+<svg viewBox="0 0 700 220" role="img" aria-label="Internet to security group to EC2">
+<rect class="b" x="10" y="80" width="100" height="60" rx="8"/><text x="30" y="115">You 🌍</text>
+<rect class="a" x="190" y="50" width="130" height="120" rx="8"/><text x="205" y="76" font-size="13" font-weight="700">Security group</text><text x="205" y="100" font-size="12">22 SSH ← my IP</text><text x="205" y="120" font-size="12">80 HTTP ← anyone</text><text x="205" y="140" font-size="12" class="m">all else: blocked</text>
+<rect class="c" x="390" y="30" width="290" height="160" rx="10"/><text x="405" y="54" font-weight="700" font-size="14">EC2 instance (t3.micro)</text>
+<rect class="b" x="405" y="70" width="120" height="40" rx="4"/><text x="415" y="95" font-size="13">Amazon Linux</text><rect class="b" x="540" y="70" width="125" height="40" rx="4"/><text x="552" y="95" font-size="13">nginx :80</text><rect class="b" x="405" y="125" width="260" height="40" rx="4"/><text x="415" y="150" font-size="13">EBS volume (8 GB disk)</text>
+<path class="l" d="M110 110 L190 110"/><path class="l" d="M320 110 L390 110"/>
+</svg><figcaption>Traffic must pass the security group before it reaches your instance.</figcaption></figure>
+
+<h2>2. Lab: deploy your nginx page on the internet</h2>
+<div class="box warn"><b class="t">Cost safety</b>Choose a <b>free-tier eligible</b> instance type (the console labels it), launch <b>one</b> instance, and terminate it at the end of today's session.</div>
+<ol class="steps">
+<li>EC2 → <b>Launch instance</b>. Name: <code>day5-web</code>. AMI: <b>Amazon Linux 2023</b>. Type: free-tier eligible (<code>t3.micro</code> or <code>t2.micro</code>).</li>
+<li><b>Key pair:</b> create new (RSA, .pem), download. Then in your Linux terminal: <code>chmod 400 ~/Downloads/day5.pem</code>. Move it to <code>~/.ssh/</code>. Never into Git.</li>
+<li><b>Network settings → Edit:</b> new security group allowing <b>SSH from "My IP"</b> (not 0.0.0.0/0!) and <b>HTTP from anywhere</b>.</li>
+<li><b>Advanced → IAM instance profile:</b> pick <code>ec2-s3-read-role</code> from Day 3.</li>
+<li><b>Advanced → User data</b> (runs once on first boot as root):
+<pre><code>#!/bin/bash
+dnf install -y nginx
+echo "&lt;h1&gt;Cloud Engineering Lab 02&lt;/h1&gt;&lt;p&gt;Hello from EC2 in $(hostname)&lt;/p&gt;" &gt; /usr/share/nginx/html/index.html
+systemctl enable --now nginx</code></pre></li>
+<li>Launch. When "running", copy the <b>Public IPv4 address</b> and open <code>http://THAT-IP</code> in your browser (use http, not https). Wait ~1 minute if it doesn't load.</li>
+<li><b>SSH in</b> from your terminal:
+<pre><code>ssh -i ~/.ssh/day5.pem ec2-user@PUBLIC_IP
+systemctl status nginx      # same commands you used in nginx-lab
+curl -s localhost
+sudo tail /var/log/nginx/access.log   # you'll see your own visit!
+exit</code></pre></li>
+<li><b>Experiment (learn by breaking):</b> edit the security group and remove the HTTP rule. Reload the page. It hangs (a blocked port causes a timeout, not an error). Add it back.</li>
+<li><b>Cleanup:</b> select the instance → Instance state → <b>Terminate</b>. Verify it shows "terminated". Delete the security group if you wish.</li>
+</ol>
+<div class="shot">📸 Evidence: browser showing your page + the EC2 console: <code>evidence/day05-ec2-web.png</code>. Also copy your user-data script into <code>aws-course/labs/day05-user-data.sh</code> in Git.</div>
+
+<h2>3. Lifecycle you must know</h2>
+<table><tr><th>State</th><th>Compute billed?</th><th>Disk billed?</th></tr>
+<tr><td>Running</td><td>Yes</td><td>Yes</td></tr><tr><td>Stopped</td><td>No</td><td>Yes (EBS)</td></tr><tr><td>Terminated</td><td>No</td><td>No (root volume deleted by default)</td></tr></table>
+<p>Public IPs change on stop/start. An <b>Elastic IP</b> keeps one fixed (and is billed if unattached/unused, as public IPv4 addresses are charged).</p>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Security groups are <b>stateful</b>, allow-only, attach to the instance's network interface. Default: all inbound blocked, all outbound allowed.</li>
+<li>Use <b>roles</b> (instance profiles) for AWS access from EC2, never stored keys.</li>
+<li>User data runs once at first launch by default.</li>
+<li>Shared Responsibility: AWS patches the host; <i>you</i> patch the guest OS.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. Your website times out after you launch it. Most likely cause?</summary>The security group doesn't allow inbound HTTP (port 80).</details>
+<details><summary>Q2. What does "stateful" mean for a security group?</summary>If inbound traffic is allowed, the reply is automatically allowed out (and vice versa).</details>
+<details><summary>Q3. Which pays no compute charge but still costs for storage?</summary>A stopped instance (its EBS volume remains).</details>
+<details><summary>Q4. How should an instance get permission to read S3?</summary>Attach an IAM role via an instance profile.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Launched with user data and saw my page live</label></li>
+<li><label><input type="checkbox" data-id="b"> SSH'd in and read nginx logs</label></li>
+<li><label><input type="checkbox" data-id="c"> Broke and fixed the security group</label></li>
+<li><label><input type="checkbox" data-id="d"> <b>Terminated</b> the instance</label></li>
+</ul>

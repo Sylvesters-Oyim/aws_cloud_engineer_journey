@@ -1,0 +1,90 @@
+<!--meta {"n":1,"title":"What Is the Cloud, Really?","time":"1.5h","week":1,"tag":"Concepts"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain the cloud to a non-technical friend, name the 6 advantages, tell IaaS / PaaS / SaaS apart, and estimate the monthly cost of a small server.</div>
+
+<h2>1. First principles: what problem does the cloud solve?</h2>
+<p>Every app needs three things: <b>compute</b> (a CPU to run code), <b>storage</b> (disks to keep data) and <b>network</b> (a way for users to reach it). Before the cloud, you had to <i>buy</i> these: servers, a room with cooling and power, a network connection, and people to babysit them.</p>
+<p>That causes three painful problems:</p>
+<ol>
+<li><b>Guessing demand.</b> Buy too few servers and the site crashes on launch day. Buy too many and money sits idle.</li>
+<li><b>Big upfront cost.</b> Thousands of dollars before your first customer.</li>
+<li><b>Slow.</b> Ordering hardware takes weeks.</li>
+</ol>
+<div class="box analogy"><b class="t">Analogy: electricity</b>
+A hundred years ago, every factory ran its own power generator. Then power plants appeared and factories just plugged into the wall and paid for the units they used. <b>Cloud computing is the power grid for computers.</b> You don't own the generator. You plug in, use what you need, and get a bill.</div>
+<p><b>So the cloud is:</b> renting computing resources (servers, storage, databases, networking) over the internet from a provider's huge data centers, paying only for what you use, and getting them in minutes.</p>
+
+<figure>
+<svg viewBox="0 0 700 220" role="img" aria-label="On-premises versus cloud">
+<text x="20" y="26" font-weight="700">Traditional (you own it)</text>
+<rect class="b" x="20" y="40" width="280" height="150" rx="10"/>
+<rect class="a" x="40" y="60" width="70" height="40" rx="4"/><text x="48" y="85" font-size="13">Server</text>
+<rect class="a" x="120" y="60" width="70" height="40" rx="4"/><text x="128" y="85" font-size="13">Storage</text>
+<rect class="a" x="200" y="60" width="80" height="40" rx="4"/><text x="208" y="85" font-size="13">Network</text>
+<text x="40" y="130" font-size="13" class="m">Power · cooling · security guard</text>
+<text x="40" y="152" font-size="13" class="m">You pay upfront. You fix it when it breaks.</text>
+<text x="40" y="174" font-size="13" class="m">Lead time: weeks</text>
+<text x="380" y="26" font-weight="700">Cloud (you rent it)</text>
+<rect class="c" x="380" y="40" width="300" height="150" rx="10"/>
+<text x="400" y="70" font-size="14">☁ AWS data centers (millions of servers)</text>
+<rect class="a" x="400" y="86" width="120" height="36" rx="4"/><text x="410" y="109" font-size="13">1 server, 1 hour</text>
+<text x="400" y="150" font-size="13" class="m">You click or run a command. Minutes.</text>
+<text x="400" y="172" font-size="13" class="m">Pay per second/hour/GB used.</text>
+<path class="l" d="M300 115 L380 115" marker-end="url(#ar)"/><defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--mut)"/></marker></defs>
+</svg>
+<figcaption>Same building blocks, different ownership model.</figcaption></figure>
+
+<h2>2. The 6 advantages of cloud (exam favourite)</h2>
+<table>
+<tr><th>Advantage</th><th>Plain English</th><th>Real life</th></tr>
+<tr><td>Trade fixed expense for variable expense</td><td>No big upfront purchase; pay as you go</td><td>Uber vs buying a car</td></tr>
+<tr><td>Benefit from massive economies of scale</td><td>AWS buys in huge volume, so unit prices are lower than yours</td><td>Wholesale vs retail</td></tr>
+<tr><td>Stop guessing capacity</td><td>Scale up or down as demand changes</td><td>Restaurant adding tables for a wedding</td></tr>
+<tr><td>Increase speed and agility</td><td>Resources in minutes, so experiments are cheap</td><td>Test an idea this afternoon</td></tr>
+<tr><td>Stop spending money running data centers</td><td>Focus on your product, not racks</td><td>Using a restaurant's kitchen instead of building one</td></tr>
+<tr><td>Go global in minutes</td><td>Deploy near customers worldwide</td><td>Opening a branch in another country overnight</td></tr>
+</table>
+
+<h2>3. Service models: how much do you manage?</h2>
+<div class="box analogy"><b class="t">Analogy: pizza as a service</b>
+<b>On-premises</b> = make pizza at home (you do everything). <b>IaaS</b> = rent a kitchen (you bring ingredients and cook). <b>PaaS</b> = takeaway (they cook, you pick the toppings). <b>SaaS</b> = dine in (just eat).</div>
+<table>
+<tr><th>Model</th><th>You manage</th><th>AWS example</th></tr>
+<tr><td>IaaS (Infrastructure)</td><td>OS, runtime, app, data</td><td>EC2</td></tr>
+<tr><td>PaaS (Platform)</td><td>App and data only</td><td>Elastic Beanstalk, RDS</td></tr>
+<tr><td>SaaS (Software)</td><td>Just use it</td><td>Amazon WorkMail, Gmail</td></tr>
+</table>
+<p><b>Deployment models:</b> <i>Public cloud</i> (all in AWS), <i>On-premises/private</i> (your own data center), <i>Hybrid</i> (both connected).</p>
+
+<h2>4. Shared Responsibility Model (preview, you'll meet it every day)</h2>
+<p>AWS is responsible for security <b>of</b> the cloud (buildings, hardware, the virtualization layer). You are responsible for security <b>in</b> the cloud (your data, who has access, firewall rules, patching your OS on EC2).</p>
+<div class="box analogy"><b class="t">Analogy: apartment building</b>The landlord secures the building entrance and the walls. You still have to lock your own door.</div>
+
+<h2>5. Lab (no AWS account needed yet): price a server</h2>
+<ol class="steps">
+<li>Open the <b>AWS Pricing Calculator</b> (search "AWS Pricing Calculator"). You can use it without logging in.</li>
+<li>Add an <b>Amazon EC2</b> estimate. Region: one close to you (e.g. Europe (Ireland) or Africa (Cape Town)). Linux, 1 instance, a small type like <code>t3.micro</code>, 730 hours/month (always on).</li>
+<li>Add a second estimate for the same server running only <b>8 hours a day on weekdays</b> (~176 hours). Compare the totals.</li>
+<li>Write the two numbers in <code>aws-course/notes/day01.md</code> and one sentence: <i>why does the cloud make the second option possible, when owning a server would not?</i></li>
+</ol>
+<div class="shot">📸 Evidence: save a screenshot of your estimate as <code>evidence/day01-pricing-calculator.png</code></div>
+
+<h2>6. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b>
+<ul><li>Cloud = on-demand delivery of IT resources over the internet with pay-as-you-go pricing.</li>
+<li>CapEx → OpEx is the headline benefit.</li>
+<li>Elasticity = scale out <i>and in</i> automatically with demand. Scalability = ability to handle growth.</li></ul></div>
+
+<h2>7. Quiz</h2>
+<details><summary>Q1. A startup doesn't want to buy servers before knowing if its app will succeed. Which advantage applies?</summary>Trade fixed expense for variable expense (CapEx to OpEx).</details>
+<details><summary>Q2. Who patches the guest operating system on an EC2 instance?</summary>You, the customer. EC2 is IaaS, and the OS is "in" the cloud.</details>
+<details><summary>Q3. Which model gives you the least to manage: IaaS, PaaS or SaaS?</summary>SaaS.</details>
+<details><summary>Q4. A company keeps some servers in its office and others in AWS, connected together. What is this called?</summary>Hybrid cloud.</details>
+
+<h2>8. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> I can explain the cloud using the electricity analogy</label></li>
+<li><label><input type="checkbox" data-id="b"> I can name the 6 advantages</label></li>
+<li><label><input type="checkbox" data-id="c"> I priced a server in the calculator</label></li>
+<li><label><input type="checkbox" data-id="d"> I committed my notes to GitHub</label></li>
+</ul>

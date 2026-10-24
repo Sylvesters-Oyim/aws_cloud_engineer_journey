@@ -1,0 +1,83 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 4 - Global Infrastructure and the AWS CLI</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day4">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 4</span><span class="badge">Concepts · Lab</span><span class="badge">⏱ 1.5h</span></p><h1>Global Infrastructure and the AWS CLI</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain Regions, Availability Zones and edge locations, choose a Region sensibly, and talk to AWS from your terminal with the CLI.</div>
+
+<h2>1. First principles: where does your app physically live?</h2>
+<p>Computers are in buildings. Buildings can lose power, flood or burn. Users far away experience delay (latency, because light takes time to travel). AWS solves both with geography:</p>
+<ul>
+<li><b>Region</b>: a geographic area (e.g. <code>eu-west-1</code> Ireland, <code>af-south-1</code> Cape Town, <code>us-east-1</code> N. Virginia). Regions are isolated from each other.</li>
+<li><b>Availability Zone (AZ)</b>: one or more separate data centers inside a Region with independent power and networking, connected by fast links. Regions typically have 3 or more.</li>
+<li><b>Edge location</b>: small sites worldwide that cache content close to users (CloudFront CDN).</li>
+</ul>
+<div class="box analogy"><b class="t">Analogy: a pizza chain</b>A <b>Region</b> is a city. An <b>AZ</b> is a separate kitchen in that city: if one has a power cut, the others still deliver. An <b>edge location</b> is a delivery scooter parked on your street holding popular pizzas ready to hand over.</div>
+<figure>
+<svg viewBox="0 0 700 250" role="img" aria-label="Region with three availability zones">
+<rect class="c" x="20" y="20" width="440" height="210" rx="12"/><text x="36" y="46" font-weight="700">Region: eu-west-1</text>
+<rect class="a" x="40" y="70" width="120" height="140" rx="8"/><text x="62" y="96" font-size="14">AZ a</text><rect class="b" x="56" y="110" width="88" height="30" rx="4"/><text x="70" y="130" font-size="12">server</text><rect class="b" x="56" y="150" width="88" height="30" rx="4"/><text x="70" y="170" font-size="12">database</text>
+<rect class="a" x="180" y="70" width="120" height="140" rx="8"/><text x="202" y="96" font-size="14">AZ b</text><rect class="b" x="196" y="110" width="88" height="30" rx="4"/><text x="210" y="130" font-size="12">server</text><rect class="b" x="196" y="150" width="88" height="30" rx="4"/><text x="210" y="170" font-size="12">standby DB</text>
+<rect class="a" x="320" y="70" width="120" height="140" rx="8"/><text x="342" y="96" font-size="14">AZ c</text><rect class="b" x="336" y="110" width="88" height="30" rx="4"/><text x="350" y="130" font-size="12">server</text>
+<rect class="b" x="500" y="40" width="180" height="70" rx="10"/><text x="520" y="70" font-size="14">Region: af-south-1</text><text x="520" y="92" font-size="12" class="m">separate, isolated</text>
+<rect class="b" x="500" y="140" width="180" height="70" rx="10"/><text x="520" y="170" font-size="14">Edge locations</text><text x="520" y="192" font-size="12" class="m">cache near users</text>
+</svg><figcaption>Spread across AZs for resilience; choose Regions for latency, law and price.</figcaption></figure>
+
+<h3>How to choose a Region (4 factors, an exam favourite)</h3>
+<ol><li><b>Compliance/data residency</b> (laws on where data may live)</li><li><b>Latency</b> to your users</li><li><b>Service availability</b> (new services launch in some Regions first)</li><li><b>Price</b> (varies by Region)</li></ol>
+
+<h2>2. Three ways to use AWS</h2>
+<table><tr><th>Way</th><th>Good for</th></tr>
+<tr><td>Management Console (website)</td><td>Learning, exploring</td></tr>
+<tr><td>CLI (command line)</td><td>Fast, scriptable, repeatable (and your Linux skills shine)</td></tr>
+<tr><td>SDKs (Python, JS…)</td><td>Code that talks to AWS</td></tr></table>
+<p>Behind all three is the same thing: <b>an HTTPS API</b>. Click or type, the same request goes to AWS.</p>
+
+<h2>3. Lab</h2>
+<ol class="steps">
+<li><b>CloudShell first (zero setup):</b> in the console click the <code>&gt;_</code> icon (CloudShell). It's a ready terminal already logged in as you. Run:
+<pre><code>aws sts get-caller-identity
+aws ec2 describe-regions --output table
+aws ec2 describe-availability-zones --region eu-west-1 --query 'AvailabilityZones[].ZoneName'</code></pre></li>
+<li>Find out which Regions are closest to you and write down which of the 4 factors matter most for your future projects.</li>
+<li><b>Install the CLI v2 on your own Linux</b> (your WSL/Ubuntu):
+<pre><code>curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+unzip awscliv2.zip &amp;&amp; sudo ./aws/install
+aws --version</code></pre></li>
+<li>Create an <b>access key for your admin IAM user</b> (IAM → Users → you → Security credentials → Create access key → "CLI"). Then:
+<pre><code>aws configure --profile lab
+# paste key id, secret, region (e.g. eu-west-1), output json
+aws sts get-caller-identity --profile lab</code></pre></li>
+<li>Try: <code>aws s3 ls --profile lab</code> (empty is fine) and <code>aws iam list-users --profile lab --output table</code>.</li>
+</ol>
+<div class="box warn"><b class="t">Key hygiene</b>Keys live in <code>~/.aws/credentials</code>, <b>never</b> in a Git repo. Add <code>.aws/</code>, <code>*.pem</code> and <code>.env</code> to your <code>.gitignore</code>. Before every push run <code>git diff --staged</code> and look for strings starting with <code>AKIA</code>. (A newer, safer option is IAM Identity Center with <code>aws configure sso</code>, which we'll adopt later.)</div>
+<div class="shot">📸 Evidence: <code>evidence/day04-sts-identity.png</code> (hide the account ID digits)</div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Most services are regional; IAM, Route 53 and CloudFront are global.</li>
+<li>High availability = use multiple AZs. Disaster recovery = use multiple Regions.</li>
+<li>Data doesn't leave a Region unless you move it.</li>
+<li>CLI / SDK access uses access keys; console uses password.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. Protect against the failure of a single data center: what do you use?</summary>Multiple Availability Zones.</details>
+<details><summary>Q2. A law requires customer data to stay in Germany. Which factor decides your Region?</summary>Compliance / data residency (eu-central-1 Frankfurt).</details>
+<details><summary>Q3. What serves cached content from locations near users?</summary>CloudFront via edge locations.</details>
+<details><summary>Q4. You want to automate resource creation from a script. Which tool?</summary>CLI or SDK.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Ran commands in CloudShell</label></li>
+<li><label><input type="checkbox" data-id="b"> CLI installed locally with a named profile</label></li>
+<li><label><input type="checkbox" data-id="c"> .gitignore protects keys</label></li>
+<li><label><input type="checkbox" data-id="d"> Can explain Region vs AZ vs edge</label></li>
+</ul>
+<nav class="pn"><a href="day03.html">← Day 3: IAM: Who Can Do What</a><a href="day05.html">Day 5: EC2: Your First Server →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>
