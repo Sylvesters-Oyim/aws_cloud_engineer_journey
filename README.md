@@ -2,7 +2,12 @@
 My self-taught journey into AWS cloud engineering, from beginner to **AWS Certified Cloud Practitioner (CLF-C02)** and **Solutions Architect – Associate (SAA-C03)**.
 
 ## Start here
-Open [`aws-course/index.html`](aws-course/index.html) in a browser (or enable GitHub Pages on `/aws-course`). Modules are practical, one per day: concept → analogy → diagram → lab → quiz.
+**Read the course as a website:** https://sylvesters-oyim.github.io/aws_cloud_engineer_journey/ (enabled via GitHub Pages, see below).
+Offline: clone the repo and double-click `aws-course/index.html`. GitHub's file viewer only shows source code, not the rendered page.
+Modules are practical, one per day: concept → analogy → diagram → lab → quiz.
+
+### Enable the website (one-time)
+Repo → Settings → Pages → Source: *Deploy from a branch* → Branch: `main` (after merging) → Folder: `/ (root)` → Save. The root `index.html` redirects to the course.
 
 ## Progress tracker
 | Day | Module | Status |
@@ -31,3 +36,6 @@ Mark ✅ as you finish each day, and put your own console screenshots in [`aws-c
 
 ## Rules for this repo
 No access keys, `.pem` files, or account IDs in commits.
+
+## Acknowledgment
+The course material (lessons, diagrams, quizzes) was drafted with the help of Claude, an AI assistant by Anthropic. I run and verify every lab myself and keep my own notes and evidence in this repo.
