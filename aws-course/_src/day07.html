@@ -1,0 +1,79 @@
+<!--meta {"n":7,"title":"EBS, Pricing Models and Week 1 Review","time":"2–4h","week":1,"tag":"Review · Quiz"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Snapshot and restore a disk, choose between On-Demand, Savings Plans, Reserved and Spot, and prove you've mastered Week 1 with an exam-style quiz.</div>
+
+<h2>1. EBS: the hard drive of the cloud</h2>
+<p><b>EBS (Elastic Block Store)</b> volumes are network-attached disks for EC2. Key facts: they live in <b>one AZ</b>, persist independently of the instance (if configured), and can be backed up as <b>snapshots</b> (stored in S3-backed storage; incremental).</p>
+<div class="box analogy"><b class="t">Analogy: external hard drive + photos of it</b>The volume is a USB drive plugged into your PC. A snapshot is a photo of its contents. You can build a new drive from the photo, even in another AZ or Region.</div>
+<table><tr><th>Type</th><th>Good for</th></tr>
+<tr><td>gp3 (SSD)</td><td>Default general purpose</td></tr><tr><td>io2 (SSD)</td><td>High-performance databases</td></tr><tr><td>st1 / sc1 (HDD)</td><td>Throughput / cold big data</td></tr></table>
+<p><b>Instance store</b>: disk physically on the host. Very fast but <b>lost when the instance stops/terminates</b>. Use for caches only.</p>
+
+<h2>2. Paying for compute: five ways</h2>
+<div class="box analogy"><b class="t">Analogy: getting around a city</b>Taxi = On-Demand (flexible, priciest). Monthly bus pass = Savings Plan/Reserved (commit, save up to ~70%). Standby ride at a huge discount that may be taken back = Spot (up to ~90% off, can be interrupted with 2 minutes' notice). Your own apartment = Dedicated Host.</div>
+<table><tr><th>Option</th><th>Commitment</th><th>Best for</th></tr>
+<tr><td>On-Demand</td><td>None, per second</td><td>Unpredictable, short, new apps</td></tr>
+<tr><td>Savings Plans</td><td>$/hour for 1 or 3 years</td><td>Steady usage, flexible across instance types</td></tr>
+<tr><td>Reserved Instances</td><td>1 or 3 years</td><td>Steady usage on specific configuration</td></tr>
+<tr><td>Spot</td><td>None, may be interrupted</td><td>Batch jobs, CI, fault-tolerant work</td></tr>
+<tr><td>Dedicated Hosts</td><td>Optional</td><td>Licensing/compliance needing a whole physical server</td></tr></table>
+<figure>
+<svg viewBox="0 0 700 190" role="img" aria-label="Relative price of purchasing options">
+<text x="10" y="22" font-weight="700" font-size="14">Rough relative cost (lower is cheaper)</text>
+<g font-size="13"><text x="10" y="60">On-Demand</text><rect class="a" x="130" y="44" width="500" height="22" rx="4"/><text x="640" y="60">100%</text>
+<text x="10" y="95">Savings Plan</text><rect class="c" x="130" y="79" width="250" height="22" rx="4"/><text x="390" y="95">~30–70%*</text>
+<text x="10" y="130">Spot</text><rect class="b" x="130" y="114" width="100" height="22" rx="4"/><text x="240" y="130">~10–50%*</text></g>
+<text x="10" y="170" font-size="12" class="m">*Illustrative; actual savings vary by instance, term, Region and time.</text>
+</svg><figcaption>The more flexibility you give up (commit or interruption), the more you save.</figcaption></figure>
+
+<h2>3. Lab: snapshot and restore</h2>
+<div class="box warn"><b class="t">Cost safety</b>Delete the volume, snapshot and instance at the end.</div>
+<ol class="steps">
+<li>Launch a small Amazon Linux instance (as on Day 5, no user data needed).</li>
+<li>SSH in. Create a file: <code>echo "important data" &gt; ~/precious.txt</code></li>
+<li>EC2 → Volumes → select the root volume → <b>Create snapshot</b> (name <code>day7-snap</code>). Wait until "Completed".</li>
+<li>Back on the instance: <code>rm ~/precious.txt</code> (disaster!).</li>
+<li>Snapshots → your snapshot → <b>Create volume from snapshot</b> (same AZ as the instance). Attach it to the instance as <code>/dev/sdf</code>.</li>
+<li>On the instance:
+<pre><code>lsblk                       # find the new disk, e.g. nvme1n1
+sudo mkdir /restore
+sudo mount /dev/nvme1n1p1 /restore 2&gt;/dev/null || sudo mount /dev/nvme1n1 /restore
+cat /restore/home/ec2-user/precious.txt</code></pre>
+If the mount reports a duplicate filesystem ID, use <code>sudo mount -o nouuid ...</code>. Your file is back!</li>
+<li><b>Cleanup:</b> terminate the instance, delete the extra volume and the snapshot. Check EC2 → Volumes and Snapshots are empty.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day07-snapshot.png</code> and <code>evidence/day07-restored-file.png</code></div>
+
+<h2>4. Week 1 exam-style quiz (try without notes, 15 min)</h2>
+<details><summary>1. Which is NOT a benefit of cloud: pay-as-you-go, global reach, owning hardware, rapid provisioning?</summary>Owning hardware.</details>
+<details><summary>2. Customer responsibility for EC2?</summary>Guest OS patching, security group config, data and IAM.</details>
+<details><summary>3. Which IAM entity gives temporary credentials to an EC2 instance?</summary>A role.</details>
+<details><summary>4. MFA protects against which risk?</summary>Compromised passwords.</details>
+<details><summary>5. A batch image-rendering job can be restarted if interrupted. Cheapest EC2 option?</summary>Spot Instances.</details>
+<details><summary>6. A database must run 24/7 for 3 years on a known instance family. Cheapest?</summary>Reserved Instance or Compute/EC2 Savings Plan (3-year).</details>
+<details><summary>7. Where does an EBS volume live?</summary>A single Availability Zone.</details>
+<details><summary>8. What happens to instance-store data on stop?</summary>It is lost.</details>
+<details><summary>9. Cheapest way to host a static site without servers?</summary>S3 static website hosting (plus CloudFront for HTTPS).</details>
+<details><summary>10. What alerts you when spend crosses a threshold?</summary>AWS Budgets.</details>
+
+<h2>5. Weekend wrap-up: commit your progress</h2>
+<pre><code>cd ~/aws_cloud_engineer_journey
+git checkout -b week-1-notes
+mkdir -p aws-course/notes aws-course/labs
+# add your notes, scripts, screenshots (no keys, no .pem files!)
+git add aws-course
+git diff --staged | grep -i -E "AKIA|secret|BEGIN RSA" &amp;&amp; echo "STOP: secrets found!"
+git commit -m "Week 1 complete: IAM, EC2, S3, EBS"
+git push -u origin week-1-notes</code></pre>
+<p>Then update the progress table in the repo <code>README.md</code> and write 5 sentences: <i>what did I learn, what confused me, what will I revisit?</i> That reflection is the single best study habit.</p>
+
+<h2>6. Looking ahead</h2>
+<p><b>Week 2:</b> Networking with VPC (subnets, routing, internet gateway, NAT), Route 53, CloudFront, then the security & compliance services the Cloud Practitioner exam loves (KMS, Shield, WAF, CloudTrail).</p>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Restored a file from a snapshot</label></li>
+<li><label><input type="checkbox" data-id="b"> Quiz score ≥ 8/10 (otherwise reread the Day for what you missed)</label></li>
+<li><label><input type="checkbox" data-id="c"> Everything terminated, billing page shows no running resources</label></li>
+<li><label><input type="checkbox" data-id="d"> Pushed my notes to GitHub</label></li>
+</ul>

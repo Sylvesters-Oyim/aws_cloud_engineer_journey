@@ -1,0 +1,101 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 6 - S3: Storage That Never Fills Up (Weekend Lab)</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day6">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 6</span><span class="badge">Storage · Lab</span><span class="badge">⏱ 3–4h</span></p><h1>S3: Storage That Never Fills Up (Weekend Lab)</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Create buckets, upload objects, control access, enable versioning, host a static website, and pick the right storage class.</div>
+
+<h2>1. First principles: block, file and object storage</h2>
+<p>There are three ways to store data, and mixing them up is the most common beginner mistake.</p>
+<table><tr><th>Type</th><th>Analogy</th><th>AWS</th><th>Use</th></tr>
+<tr><td><b>Block</b></td><td>A hard drive inside one computer</td><td>EBS</td><td>OS disks, databases</td></tr>
+<tr><td><b>File</b></td><td>A shared office network drive</td><td>EFS</td><td>Many servers share folders</td></tr>
+<tr><td><b>Object</b></td><td>A cloud locker where you hand over a file and get a ticket (URL) back</td><td><b>S3</b></td><td>Images, backups, logs, websites, data lakes</td></tr></table>
+<p><b>S3 (Simple Storage Service)</b>: you create a <b>bucket</b> (globally unique name, lives in one Region) and put <b>objects</b> (file + metadata, up to 5 TB each) in it. There are no real folders, just keys like <code>photos/2026/cat.jpg</code>. It is designed for 99.999999999% (11 nines) durability: data is stored redundantly across at least 3 AZs.</p>
+<figure>
+<svg viewBox="0 0 700 200" role="img" aria-label="S3 bucket">
+<rect class="b" x="10" y="70" width="100" height="60" rx="8"/><text x="30" y="105">You / app</text>
+<rect class="c" x="200" y="20" width="300" height="160" rx="12"/><text x="215" y="44" font-weight="700" font-size="14">Bucket: my-lab-bucket-2026-x7</text>
+<rect class="a" x="215" y="60" width="130" height="30" rx="4"/><text x="225" y="80" font-size="12">index.html</text><rect class="a" x="355" y="60" width="130" height="30" rx="4"/><text x="365" y="80" font-size="12">logo.png</text><rect class="a" x="215" y="100" width="270" height="30" rx="4"/><text x="225" y="120" font-size="12">backups/2026-10/db.sql.gz</text>
+<text x="215" y="160" font-size="12" class="m">Replicated across ≥3 AZs automatically</text>
+<path class="l" d="M110 100 L200 100"/><text x="120" y="92" font-size="11" class="m">HTTPS API</text>
+<rect class="b" x="560" y="70" width="120" height="60" rx="8"/><text x="578" y="105" font-size="13">Visitors 🌍</text><path class="l" d="M500 100 L560 100" stroke-dasharray="4 4"/>
+</svg><figcaption>Private by default. You decide who can read.</figcaption></figure>
+
+<h2>2. Storage classes: pay less for data you touch less</h2>
+<div class="box analogy"><b class="t">Analogy: your home</b>Things you use daily sit on the desk (Standard). Seasonal items go in the cupboard (Infrequent Access). Old tax papers go in the loft (Glacier): cheap to keep, slower to fetch.</div>
+<table><tr><th>Class</th><th>Use</th></tr>
+<tr><td>Standard</td><td>Frequently accessed</td></tr>
+<tr><td>Intelligent-Tiering</td><td>Unknown/changing access: AWS moves it for you</td></tr>
+<tr><td>Standard-IA / One Zone-IA</td><td>Rare access, millisecond retrieval (One Zone = single AZ, cheaper, less resilient)</td></tr>
+<tr><td>Glacier Instant / Flexible / Deep Archive</td><td>Archives; retrieval from minutes to hours; cheapest</td></tr></table>
+<p><b>Lifecycle rules</b> move or delete objects automatically after N days.</p>
+
+<h2>3. Lab part A: bucket, upload, access</h2>
+<ol class="steps">
+<li>S3 → <b>Create bucket</b>. Name globally unique, e.g. <code>sylvester-lab-2026-12345</code>. Same Region as your other labs. Keep <b>Block all public access ON</b>.</li>
+<li>Upload your <code>nginx-lab/html/index.html</code>. Click the object → open its Object URL. You get <b>AccessDenied</b>: private by default (correct!).</li>
+<li>Click <b>Open</b> (pre-signed temporary URL). It works for a few minutes. That is how apps share private files safely.</li>
+<li>From the CLI:
+<pre><code>echo "hello s3" &gt; hello.txt
+aws s3 cp hello.txt s3://YOUR-BUCKET/ --profile lab
+aws s3 ls s3://YOUR-BUCKET/ --profile lab
+aws s3 presign s3://YOUR-BUCKET/hello.txt --expires-in 120 --profile lab</code></pre></li>
+</ol>
+<h2>Lab part B: versioning (your safety net)</h2>
+<ol class="steps">
+<li>Bucket → Properties → <b>Bucket Versioning → Enable</b>.</li>
+<li>Edit <code>hello.txt</code> locally ("hello v2") and upload again. In the console toggle <b>Show versions</b>: both exist.</li>
+<li><b>Delete</b> the object. It just adds a <i>delete marker</i>. Show versions, delete the marker, and your file is back. Ransomware and fat-finger insurance.</li>
+</ol>
+<h2>Lab part C: static website</h2>
+<ol class="steps">
+<li>Create a <b>new</b> bucket for the site. Upload <code>index.html</code> and a simple <code>error.html</code>.</li>
+<li>Properties → <b>Static website hosting → Enable</b>, index <code>index.html</code>, error <code>error.html</code>.</li>
+<li>Permissions → turn off "Block all public access" for <i>this bucket only</i> and acknowledge the warning, then add a bucket policy (swap in your bucket name):
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "PublicRead",
+    "Effect": "Allow",
+    "Principal": "*",
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::YOUR-SITE-BUCKET/*"
+  }]
+}</code></pre></li>
+<li>Open the <b>Bucket website endpoint</b> (Properties → bottom). Your page is live. No server to manage! Note it is HTTP only; HTTPS comes later with CloudFront.</li>
+<li>Add a lifecycle rule on the first bucket: transition to Standard-IA after 30 days (just create it; you don't need to wait).</li>
+<li><b>Cleanup:</b> empty then delete both buckets (versioned buckets: "Empty" removes all versions). Storage is cheap but tidy habits are free.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day06-s3-website.png</code>, <code>evidence/day06-versions.png</code>. Commit the policy JSON to <code>aws-course/labs/</code> with the bucket name replaced by a placeholder.</div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Bucket names are globally unique; buckets are regional; data is regionally stored.</li>
+<li>Default: private. <b>Block Public Access</b> is the master safety switch.</li>
+<li>Encryption at rest is on by default (SSE-S3). Versioning protects against overwrite/delete.</li>
+<li>S3 is object storage; not for OS disks or databases (use EBS).</li>
+<li>Static hosting; for HTTPS and global speed, add CloudFront.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. Archive compliance records for 7 years at lowest cost, retrieval within 12 hours OK.</summary>S3 Glacier Deep Archive.</details>
+<details><summary>Q2. Access pattern unpredictable. Which class?</summary>S3 Intelligent-Tiering.</details>
+<details><summary>Q3. A user accidentally deletes an object in a versioned bucket. Recovery?</summary>Remove the delete marker / restore the previous version.</details>
+<details><summary>Q4. Do you need a server to host a static website?</summary>No. S3 static website hosting.</details>
+<details><summary>Q5. Which storage would you attach to an EC2 instance as its boot disk?</summary>EBS (block storage), not S3.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Uploaded and presigned an object</label></li>
+<li><label><input type="checkbox" data-id="b"> Restored a deleted object via versions</label></li>
+<li><label><input type="checkbox" data-id="c"> Static site live, then buckets cleaned up</label></li>
+<li><label><input type="checkbox" data-id="d"> Can explain block vs file vs object</label></li>
+</ul>
+<nav class="pn"><a href="day05.html">← Day 5: EC2: Your First Server</a><a href="day07.html">Day 7: EBS, Pricing Models and Week 1 Review →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

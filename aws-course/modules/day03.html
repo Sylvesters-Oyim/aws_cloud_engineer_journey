@@ -1,0 +1,88 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 3 - IAM: Who Can Do What</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day3">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 3</span><span class="badge">Security · Lab</span><span class="badge">⏱ 2h</span></p><h1>IAM: Who Can Do What</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Create users, groups, roles and policies, read an IAM policy in JSON, and apply the principle of least privilege.</div>
+
+<h2>1. First principles: authentication vs authorization</h2>
+<p>Every request to AWS (a click, a CLI command, code) answers two questions:</p>
+<ol><li><b>Authentication:</b> Who are you? (password, access key, role)</li><li><b>Authorization:</b> Are you allowed to do <i>this</i> to <i>that</i>? (policies)</li></ol>
+<p><b>IAM (Identity and Access Management)</b> is AWS's system for both. It's free and global.</p>
+<div class="box analogy"><b class="t">Analogy: a hotel</b>
+<b>User</b> = a guest with their own ID. <b>Group</b> = "Staff" or "VIP" (rules given to many people at once). <b>Policy</b> = what the keycard opens (Room 204 and the gym, not the manager's office). <b>Role</b> = a uniform you borrow temporarily: a plumber (or an EC2 server) puts on the "maintenance" uniform and gets those keys for a short time, with no permanent card.</div>
+
+<figure>
+<svg viewBox="0 0 700 230" role="img" aria-label="IAM building blocks">
+<rect class="b" x="20" y="20" width="130" height="40" rx="6"/><text x="40" y="45">User: Amina</text>
+<rect class="b" x="20" y="80" width="130" height="40" rx="6"/><text x="40" y="105">User: Brian</text>
+<rect class="a" x="210" y="50" width="130" height="50" rx="6"/><text x="228" y="80">Group: Devs</text>
+<rect class="c" x="400" y="20" width="270" height="60" rx="6"/><text x="415" y="45" font-size="14">Policy: AmazonS3ReadOnlyAccess</text><text x="415" y="66" font-size="12" class="m">Allow s3:Get*, s3:List* on *</text>
+<path class="l" d="M150 40 L210 70"/><path class="l" d="M150 100 L210 82"/><path class="l" d="M340 75 L400 55"/>
+<rect class="b" x="20" y="160" width="130" height="50" rx="6"/><text x="40" y="190">EC2 server</text>
+<rect class="a" x="210" y="160" width="130" height="50" rx="6"/><text x="238" y="190">Role: App</text>
+<rect class="c" x="400" y="160" width="270" height="50" rx="6"/><text x="415" y="190" font-size="14">Policy: write to one S3 bucket</text>
+<path class="l" d="M150 185 L210 185"/><path class="l" d="M340 185 L400 185"/>
+<text x="30" y="145" font-size="12" class="m">people → group → policy</text><text x="260" y="148" font-size="12" class="m">services assume roles</text>
+</svg><figcaption>Attach policies to groups and roles, not to individuals.</figcaption></figure>
+
+<h2>2. Reading a policy</h2>
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["s3:GetObject", "s3:ListBucket"],
+    "Resource": ["arn:aws:s3:::my-lab-bucket", "arn:aws:s3:::my-lab-bucket/*"]
+  }]
+}</code></pre>
+<p>Read it as a sentence: <i>"<b>Allow</b> these <b>actions</b> on these <b>resources</b>."</i> Key rules:</p>
+<ul>
+<li>Everything is <b>denied by default</b>. You must explicitly allow.</li>
+<li>An explicit <b>Deny</b> always beats any Allow.</li>
+<li><b>ARN</b> = Amazon Resource Name, the unique address of a thing.</li>
+<li><b>Least privilege:</b> grant only what's needed. Start narrow, widen on demand.</li>
+</ul>
+
+<h2>3. Lab: build a read-only teammate</h2>
+<ol class="steps">
+<li>IAM → <b>User groups → Create group</b> <code>ReadOnlyTeam</code>, attach <code>ReadOnlyAccess</code>.</li>
+<li>IAM → <b>Users → Create user</b> <code>test-reader</code> (console access), add to <code>ReadOnlyTeam</code>. Note the generated password.</li>
+<li>Open a <b>private/incognito window</b>, sign in with the IAM sign-in URL as <code>test-reader</code>. Try to create an S3 bucket. You should get <b>Access denied</b>. Try to list buckets: allowed.</li>
+<li>Back as admin, create a <b>custom policy</b> (IAM → Policies → Create → JSON) from the example above for a bucket name of your choice, name it <code>LabBucketRead</code>.</li>
+<li>Attach it to <code>test-reader</code> and use the <b>Policy Simulator</b> (IAM → Policy simulator, or the "Simulate" tab) to test <code>s3:PutObject</code> (denied) vs <code>s3:GetObject</code> (allowed).</li>
+<li>Create a <b>role</b>: IAM → Roles → Create role → trusted entity <b>AWS service → EC2</b> → attach <code>AmazonS3ReadOnlyAccess</code> → name <code>ec2-s3-read-role</code>. You'll use it on Day 5.</li>
+<li><b>Cleanup:</b> delete <code>test-reader</code>. Keep the group and role (they cost nothing).</li>
+</ol>
+<div class="shot">📸 Evidence: the "Access denied" message and the policy simulator result → <code>evidence/day03-access-denied.png</code>, <code>evidence/day03-simulator.png</code></div>
+
+<h2>4. Why roles beat access keys</h2>
+<p>Access keys are long-lived passwords that people accidentally leak. A role hands out <b>temporary credentials</b> that expire and rotate automatically. When your EC2 server needs S3, attach a role, never paste keys onto the server.</p>
+
+<h2>5. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>IAM is global, not regional, and free.</li>
+<li>Users = people/apps; groups contain users only (no nesting); roles = temporary access for services/other accounts.</li>
+<li>Identity-based policy (attached to identity) vs resource-based policy (e.g. S3 bucket policy).</li>
+<li>Password policy, MFA, access keys, credential report, Access Advisor = tools to audit.</li></ul></div>
+
+<h2>6. Quiz</h2>
+<details><summary>Q1. An EC2 instance needs to read S3 objects. Best approach?</summary>Attach an IAM role with S3 read permissions to the instance.</details>
+<details><summary>Q2. A user has an Allow for s3:* and a Deny for s3:DeleteObject. Can they delete?</summary>No. Explicit Deny wins.</details>
+<details><summary>Q3. What is the default permission for a new IAM user?</summary>None (implicit deny).</details>
+<details><summary>Q4. Can an IAM group contain another group?</summary>No.</details>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Created group, user, custom policy</label></li>
+<li><label><input type="checkbox" data-id="b"> Saw "Access denied" first-hand</label></li>
+<li><label><input type="checkbox" data-id="c"> Created the EC2 role</label></li>
+<li><label><input type="checkbox" data-id="d"> I can read a policy JSON aloud</label></li>
+</ul>
+<nav class="pn"><a href="day02.html">← Day 2: Create and Lock Down Your AWS Account</a><a href="day04.html">Day 4: Global Infrastructure and the AWS CLI →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

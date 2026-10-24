@@ -1,0 +1,68 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 2 - Create and Lock Down Your AWS Account</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day2">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 2</span><span class="badge">Security · Lab</span><span class="badge">⏱ 1.5h</span></p><h1>Create and Lock Down Your AWS Account</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Have a secured AWS account: root user locked with MFA, a daily-use admin identity, and a budget alarm that emails you before costs get out of hand.</div>
+
+<h2>1. First principles: whose key is this?</h2>
+<p>When you sign up you create the <b>root user</b>, logged in with your email address. It can do <i>anything</i>, including closing the account, and its permissions cannot be restricted. If someone steals it, they can mine crypto on your credit card within minutes. It happens daily to beginners.</p>
+<div class="box analogy"><b class="t">Analogy: the master key</b>The root user is the building master key. You keep it in a safe (strong password + MFA) and almost never use it. For daily work you cut a normal key (an admin user or role) that can be disabled if lost.</div>
+<figure>
+<svg viewBox="0 0 700 190" role="img" aria-label="Root vs daily admin">
+<rect class="a" x="20" y="30" width="190" height="110" rx="10"/><text x="40" y="60" font-weight="700">Root user</text><text x="40" y="84" font-size="13">Email + password + MFA</text><text x="40" y="106" font-size="13" class="m">Used ~3 times a year</text><text x="40" y="126" font-size="13" class="m">(billing, close account)</text>
+<rect class="b" x="260" y="30" width="190" height="110" rx="10"/><text x="280" y="60" font-weight="700">Admin identity</text><text x="280" y="84" font-size="13">IAM Identity Center or IAM user</text><text x="280" y="106" font-size="13" class="m">Your everyday login</text>
+<rect class="c" x="500" y="30" width="180" height="110" rx="10"/><text x="520" y="60" font-weight="700">AWS resources</text><text x="520" y="84" font-size="13">EC2, S3, ...</text><path class="l" d="M210 85 L258 85" stroke-dasharray="4 4"/><path class="l" d="M450 85 L498 85"/>
+<text x="150" y="170" font-size="13" class="m">create once, then lock away</text>
+</svg><figcaption>Lock away the root key; work through a limited identity.</figcaption></figure>
+
+<h2>2. Lab</h2>
+<div class="box warn"><b class="t">Cost safety</b>You will need a credit/debit card. Do the budget step (5) <b>today</b> and never post keys, passwords or account IDs publicly.</div>
+<ol class="steps">
+<li><b>Sign up</b> at aws.amazon.com → "Create an AWS account". Use an email you will keep for years. Choose the <b>free plan</b> if offered (it caps spending with credits). Read its current terms.</li>
+<li><b>Secure root:</b> sign in as root → top-right account menu → <b>Security credentials</b> → <b>Assign MFA device</b> → Authenticator app (Google Authenticator, Authy…). Scan the QR, enter two consecutive codes. Save recovery info offline.</li>
+<li><b>Never create root access keys.</b> If any exist, delete them.</li>
+<li><b>Create your daily admin.</b> Easiest for a beginner: <b>IAM → Users → Create user</b> (<code>yourname-admin</code>), tick "Provide console access", attach policy <code>AdministratorAccess</code> (via a group <code>Admins</code>), then enable MFA on this user too. <i>(Later you'll learn IAM Identity Center, the recommended long-term approach.)</i></li>
+<li><b>Budget alarm:</b> Billing and Cost Management → <b>Budgets → Create budget</b> → "Zero spend budget" template (alerts the moment you're charged anything) + a second monthly cost budget of $10 with alerts at 80% and 100%. Add your email.</li>
+<li><b>Enable IAM billing access</b> (Account page → "IAM user and role access to Billing information" → Activate) so your admin can see bills without root.</li>
+<li>Sign out of root. Sign in via the <b>IAM user sign-in URL</b> (shown on the IAM dashboard; bookmark it). Choose a default region near you and stay on it.</li>
+</ol>
+<div class="shot">📸 Evidence (blur account ID/email): <code>evidence/day02-root-mfa-enabled.png</code>, <code>evidence/day02-budget-created.png</code></div>
+
+<h2>3. Why each step matters</h2>
+<table>
+<tr><th>Step</th><th>Threat it stops</th></tr>
+<tr><td>Root MFA</td><td>Stolen password = stolen account</td></tr>
+<tr><td>No root keys</td><td>Keys leak on GitHub and get abused in minutes</td></tr>
+<tr><td>Admin user ≠ root</td><td>You can deactivate a compromised user; you can't "deactivate" root</td></tr>
+<tr><td>Budgets</td><td>Forgotten resources and surprise bills</td></tr>
+</table>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Tasks <i>only</i> root can do: change account settings/support plan, close the account, restore IAM permissions of an admin who locked themselves out, etc.</li>
+<li>MFA = something you know + something you have.</li>
+<li><b>AWS Budgets</b> = alert on cost/usage thresholds. <b>Cost Explorer</b> = visualize and analyze past spend. <b>Billing alarms</b> use CloudWatch.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. Best practice for the root user?</summary>Enable MFA, don't create access keys, don't use it for daily tasks.</details>
+<details><summary>Q2. Which service sends an email when forecasted spend exceeds a threshold?</summary>AWS Budgets.</details>
+<details><summary>Q3. Which is stronger: password only, or password + authenticator code?</summary>Password + authenticator (MFA).</details>
+<details><summary>Q4. You accidentally commit an access key to a public GitHub repo. First action?</summary>Deactivate/delete the key in IAM immediately, then rotate and review CloudTrail for misuse. Removing the commit is not enough; assume it's compromised.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> AWS account created</label></li>
+<li><label><input type="checkbox" data-id="b"> Root MFA on, no root access keys</label></li>
+<li><label><input type="checkbox" data-id="c"> Admin IAM user with MFA</label></li>
+<li><label><input type="checkbox" data-id="d"> Zero-spend + monthly budget created</label></li>
+<li><label><input type="checkbox" data-id="e"> Screenshots saved in evidence/</label></li>
+</ul>
+<nav class="pn"><a href="day01.html">← Day 1: What Is the Cloud, Really?</a><a href="day03.html">Day 3: IAM: Who Can Do What →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

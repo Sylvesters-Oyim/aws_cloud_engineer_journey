@@ -1,0 +1,6 @@
+# secrets: never commit
+*.pem
+.env
+.aws/
+credentials
+*.key
