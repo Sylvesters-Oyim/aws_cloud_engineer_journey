@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 14 - Week 2 Review and Mock Exam</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day14">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 14</span><span class="badge">Review · Quiz</span><span class="badge">⏱ 2–4h</span></p><h1>Week 2 Review and Mock Exam</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Score yourself on a 40-question Cloud Practitioner-style mock, find your weak domains, and have a booked exam date and a 2-week plan.</div>
+
+<h2>1. Where you stand</h2>
+<p>You have now met almost every service behind the CLF-C02 exam: cloud concepts, IAM, EC2, S3, EBS, VPC, Route 53, CloudFront, KMS, CloudTrail, CloudWatch, billing tools and support plans. The exam is mostly <b>recognition</b>: "which service solves this?". Your hands-on labs give you the edge.</p>
+<table><tr><th>Exam domain</th><th>Weight</th><th>Your Week 1–2 coverage</th></tr>
+<tr><td>Cloud Concepts</td><td>24%</td><td>Days 1, 4, 12 (pillars)</td></tr>
+<tr><td>Security and Compliance</td><td>30%</td><td>Days 2, 3, 9, 11</td></tr>
+<tr><td>Cloud Technology and Services</td><td>34%</td><td>Days 5–10; <b>still to learn:</b> databases, Lambda, containers, AI services (Week 3)</td></tr>
+<tr><td>Billing, Pricing, Support</td><td>12%</td><td>Days 2, 7, 12</td></tr></table>
+
+<h2>2. Mock exam: 40 questions (45 minutes, no notes)</h2>
+<div class="box warn"><b class="t">Rules</b>Write your answers on paper first, <i>then</i> open each answer. Count correct ones. 28/40 (70%) is a safe pass line; aim for 34+.</div>
+<details><summary>1. Which responsibility belongs to AWS under the shared responsibility model?</summary>Security <i>of</i> the cloud: physical data centers, hardware, hypervisor, managed-service infrastructure.</details>
+<details><summary>2. A company wants to move from CapEx to OpEx. Which cloud benefit is this?</summary>Pay-as-you-go pricing (trade fixed expense for variable expense).</details>
+<details><summary>3. Which design principle improves resilience against a data center failure?</summary>Deploy across multiple Availability Zones.</details>
+<details><summary>4. Which IAM feature gives an EC2 instance permissions without storing keys?</summary>IAM role (instance profile).</details>
+<details><summary>5. Best protection for the root user?</summary>Strong password + MFA, no access keys, don't use for daily work.</details>
+<details><summary>6. A subnet's route table has 0.0.0.0/0 → igw. What is the subnet?</summary>Public subnet.</details>
+<details><summary>7. Which firewall can explicitly deny an IP?</summary>Network ACL.</details>
+<details><summary>8. Private instances need outbound internet only. Which service?</summary>NAT Gateway.</details>
+<details><summary>9. Which service gives low-latency global delivery of static content?</summary>CloudFront.</details>
+<details><summary>10. Which Route 53 policy sends users to the lowest-latency Region?</summary>Latency-based routing.</details>
+<details><summary>11. Which S3 storage class is cheapest for rarely accessed archival data with hours-long retrieval?</summary>S3 Glacier Flexible Retrieval / Deep Archive.</details>
+<details><summary>12. Which EC2 purchase option suits a fault-tolerant batch job at the lowest cost?</summary>Spot Instances.</details>
+<details><summary>13. Which tool forecasts and alerts on spend?</summary>AWS Budgets.</details>
+<details><summary>14. Which service audits API calls?</summary>CloudTrail.</details>
+<details><summary>15. Which service detects threats such as crypto-mining instances?</summary>GuardDuty.</details>
+<details><summary>16. Which service blocks SQL injection on an ALB or CloudFront?</summary>AWS WAF.</details>
+<details><summary>17. Where do you get AWS compliance reports (SOC, ISO)?</summary>AWS Artifact.</details>
+<details><summary>18. Which service stores and rotates database credentials?</summary>Secrets Manager.</details>
+<details><summary>19. Which service is a managed key store for encryption keys?</summary>AWS KMS.</details>
+<details><summary>20. Which metric needs the CloudWatch agent on EC2?</summary>Memory utilisation (and disk space).</details>
+<details><summary>21. Which service sends email/SMS notifications to subscribers?</summary>SNS.</details>
+<details><summary>22. Which Well-Architected pillar covers 'recover from failure automatically'?</summary>Reliability.</details>
+<details><summary>23. Which service gives automated advice on cost optimisation and security gaps?</summary>Trusted Advisor.</details>
+<details><summary>24. Which pricing option gives up to ~72% off for 1 or 3 year commitments with flexibility across instance families?</summary>Compute Savings Plans.</details>
+<details><summary>25. Which service lets one company manage many accounts with consolidated billing?</summary>AWS Organizations.</details>
+<details><summary>26. Block-level storage that lives in a single AZ?</summary>EBS.</details>
+<details><summary>27. Which service gives a managed relational database with automated backups?</summary>Amazon RDS.</details>
+<details><summary>28. Which service runs code without servers, billed per execution?</summary>AWS Lambda.</details>
+<details><summary>29. Which Well-Architected pillar is about reducing environmental impact?</summary>Sustainability.</details>
+<details><summary>30. Dedicated private network connection from office to AWS?</summary>AWS Direct Connect.</details>
+<details><summary>31. What do you call a copy of an EBS volume at a point in time?</summary>Snapshot.</details>
+<details><summary>32. Which AWS service provides virtual servers?</summary>Amazon EC2.</details>
+<details><summary>33. The cheapest way to learn without a surprise bill?</summary>Set a Budget and billing alerts, use cleanup steps, delete unused resources.</details>
+<details><summary>34. Which tool estimates the cost of an architecture before building?</summary>AWS Pricing Calculator.</details>
+<details><summary>35. Which support plans include 24/7 access to AWS experts (exam guides may use older names too)?</summary>Business Support+ / Enterprise / Unified Operations (older: Business and Enterprise).</details>
+<details><summary>36. S3 data is lost if the AZ fails? True or false?</summary>False: S3 stores data redundantly across multiple AZs (except One Zone classes).</details>
+<details><summary>37. Which service provides DDoS protection at no extra cost on all accounts?</summary>Shield Standard.</details>
+<details><summary>38. Which EC2 option is a physical server dedicated to you for licensing needs?</summary>Dedicated Host.</details>
+<details><summary>39. What does 'elasticity' mean?</summary>Resources scale out and in automatically with demand.</details>
+<details><summary>40. Which CloudFront feature keeps an S3 origin private?</summary>Origin Access Control (OAC).</details>
+
+<h2>3. Fix weak spots (the highest-value hour of the week)</h2>
+<ol class="steps">
+<li>For each missed question write a one-line rule in your notes: <i>"Cheapest interruptible compute = Spot"</i>.</li>
+<li>Group misses by domain. Reread that Day's concept section, not the whole module.</li>
+<li>Teach it back: explain 3 missed topics out loud as if to a friend (Feynman technique).</li>
+<li>Re-take only the missed questions tomorrow (spaced repetition).</li>
+</ol>
+
+<h2>4. Book the exam</h2>
+<p>Go to <code>aws.amazon.com/certification</code> → Cloud Practitioner (CLF-C02) → schedule with Pearson VUE (test centre or online proctored). Pick a date <b>about 3 weeks away</b>. A booked date turns "someday" into a deadline. First-time AWS candidates often get an exam voucher or practice-exam benefits, so check your AWS Certification account. Look for the free <b>AWS Skill Builder</b> Official Practice Question Set and Exam Prep plan.</p>
+
+<h2>5. Weekend git routine</h2>
+<pre><code>cd ~/aws_cloud_engineer_journey
+git add aws-course evidence 2&gt;/dev/null
+git diff --staged | grep -i -E "AKIA|secret|BEGIN RSA" &amp;&amp; echo "STOP: secrets found!"
+git commit -m "Week 2 complete: VPC, Route 53, CloudFront, security, monitoring"
+git push</code></pre>
+<p>Update the README progress table (✅ days 8–14) and write your 5-sentence reflection.</p>
+
+<h2>6. Looking ahead: Week 3</h2>
+<p>Databases (RDS, DynamoDB), serverless (Lambda, API Gateway), containers overview, messaging (SQS/SNS), and the "AI/ML and migration service" names the exam likes. Then Week 4: final revision and exam.</p>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Mock score recorded: ___/40</label></li>
+<li><label><input type="checkbox" data-id="b"> Weak-spot rules written</label></li>
+<li><label><input type="checkbox" data-id="c"> Exam date booked</label></li>
+<li><label><input type="checkbox" data-id="d"> Progress pushed to GitHub</label></li>
+</ul>
+<nav class="pn"><a href="day13.html">← Day 13: Weekend Project: A Secure, Monitored Web App</a><a href="../index.html">Course home →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

@@ -1,0 +1,64 @@
+<!--meta {"n":11,"title":"Security Services: KMS, CloudTrail, GuardDuty, WAF","time":"1.5–2h","week":2,"tag":"Security · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Match each AWS security service to the question it answers, encrypt data with KMS from the CLI, and find "who did what" in CloudTrail. Security is 30% of the Cloud Practitioner exam, the biggest domain.</div>
+
+<h2>1. First principles: five questions security must answer</h2>
+<div class="box analogy"><b class="t">Analogy: protecting a bank</b>Locks and vault = <b>encryption</b>. CCTV that records every entry = <b>logging</b>. A guard watching the cameras for suspicious behaviour = <b>threat detection</b>. A crowd-barrier outside = <b>DDoS/web-attack protection</b>. Regular inspection of the building = <b>vulnerability scanning</b>.</div>
+<table><tr><th>The question</th><th>The service</th><th>One-line memory</th></tr>
+<tr><td>Who can do what?</td><td><b>IAM</b> (Day 3)</td><td>Keys and badges</td></tr>
+<tr><td>Is my data unreadable if stolen?</td><td><b>KMS</b></td><td>Key vault. Creates and controls encryption keys</td></tr>
+<tr><td>Need an HTTPS certificate?</td><td><b>ACM</b></td><td>Free public TLS certs, auto-renewed</td></tr>
+<tr><td>Where do I store passwords/API keys?</td><td><b>Secrets Manager</b> (auto-rotation) / Parameter Store</td><td>Never hard-code secrets</td></tr>
+<tr><td>Who did what, when?</td><td><b>CloudTrail</b></td><td>CCTV for API calls</td></tr>
+<tr><td>Is my config compliant? What changed?</td><td><b>AWS Config</b></td><td>Time machine for settings</td></tr>
+<tr><td>Is someone attacking or misbehaving?</td><td><b>GuardDuty</b></td><td>Smart guard analysing logs</td></tr>
+<tr><td>Are my servers vulnerable?</td><td><b>Inspector</b></td><td>Scans EC2/containers/Lambda for CVEs</td></tr>
+<tr><td>Is there personal data in S3?</td><td><b>Macie</b></td><td>Finds PII in buckets</td></tr>
+<tr><td>DDoS flood?</td><td><b>Shield</b> (Standard free, Advanced paid)</td><td>Crowd barrier</td></tr>
+<tr><td>SQL injection / XSS / bad bots?</td><td><b>WAF</b></td><td>Filters web requests (layer 7)</td></tr>
+<tr><td>Show me compliance reports (ISO, SOC)</td><td><b>Artifact</b></td><td>AWS's document library</td></tr>
+<tr><td>One dashboard for all findings</td><td><b>Security Hub</b></td><td>Control room</td></tr></table>
+
+<h2>2. Encryption in two sentences</h2>
+<p><b>At rest</b> = data stored on disk is scrambled (S3, EBS, RDS support this with KMS keys, often one click). <b>In transit</b> = data moving over the network is scrambled (HTTPS/TLS). With KMS, the key never leaves AWS's hardware; you only ask it to encrypt/decrypt and IAM + key policies decide who may ask. This is how a thief who steals the disk gets nothing.</p>
+<div class="box exam"><b class="t">Exam focus</b>"Audit all API calls made in the account" → CloudTrail. "Track resource configuration changes over time / check compliance rules" → Config. "Detect compromised instances/malicious IPs" → GuardDuty. "Block SQL injection" → WAF. "Store a database password with automatic rotation" → Secrets Manager.</div>
+
+<h2>3. Lab: KMS and CloudTrail (about 50 minutes)</h2>
+<h3>Part A: be your own detective with CloudTrail</h3>
+<ol class="steps">
+<li>Console → <b>CloudTrail → Event history</b> (on by default, last 90 days, free).</li>
+<li>Filter <i>Event name</i> = <code>ConsoleLogin</code>. Find your own login: note time, source IP and whether MFA was used.</li>
+<li>Filter <code>CreateBucket</code> or <code>RunInstances</code>. Click an event and read the JSON: <code>userIdentity</code> (who), <code>eventTime</code> (when), <code>sourceIPAddress</code> (from where), <code>requestParameters</code> (what).</li>
+</ol>
+<h3>Part B: encrypt with your own key</h3>
+<ol class="steps">
+<li>KMS → <b>Customer managed keys → Create key</b>: symmetric, encrypt/decrypt, alias <code>alias/day11-key</code>, you as administrator and user.</li>
+<li>In CloudShell:
+<pre><code>echo "my secret plan" &gt; secret.txt
+aws kms encrypt --key-id alias/day11-key --plaintext fileb://secret.txt \
+  --query CiphertextBlob --output text | base64 --decode &gt; secret.enc
+cat secret.enc            # gibberish: encrypted
+aws kms decrypt --ciphertext-blob fileb://secret.enc \
+  --query Plaintext --output text | base64 --decode</code></pre>
+The last command prints your plan: KMS knew which key to use from metadata inside the file.</li>
+<li>Go back to CloudTrail Event history and filter <code>Encrypt</code>/<code>Decrypt</code>. Your own key usage was logged!</li>
+<li><b>Cleanup:</b> KMS → select key → Key actions → <b>Schedule key deletion</b> (minimum 7 days; a key costs about USD 1/month, prorated). <code>rm secret.*</code></li>
+</ol>
+<h3>Optional: look, don't leave on</h3>
+<p>GuardDuty offers a 30-day free trial. Enable it, read the "sample findings" feature to see what threats look like, then <b>suspend/disable</b> it before the trial ends.</p>
+<div class="shot">📸 Evidence: <code>evidence/day11-cloudtrail-event.png</code> and <code>evidence/day11-kms-encrypt.png</code> (don't include real secrets)</div>
+
+<h2>4. Quiz</h2>
+<details><summary>1. Which service records every API call?</summary>CloudTrail.</details>
+<details><summary>2. Which finds PII in S3?</summary>Macie.</details>
+<details><summary>3. Which is free DDoS protection included by default?</summary>Shield Standard.</details>
+<details><summary>4. Where should an app fetch a database password from?</summary>Secrets Manager (or Parameter Store SecureString).</details>
+<details><summary>5. Which reports does a customer download to show auditors AWS's compliance?</summary>AWS Artifact.</details>
+<details><summary>6. Who is responsible for encrypting data in S3, AWS or you?</summary>You choose and configure it (customer responsibility "in" the cloud); AWS provides the tools.</details>
+
+<h2>5. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Found my own login in CloudTrail</label></li>
+<li><label><input type="checkbox" data-id="b"> Encrypted and decrypted with KMS</label></li>
+<li><label><input type="checkbox" data-id="c"> Key deletion scheduled; GuardDuty off</label></li>
+</ul>

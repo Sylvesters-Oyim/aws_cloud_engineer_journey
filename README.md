@@ -19,7 +19,14 @@ Repo → Settings → Pages → Source: *Deploy from a branch* → Branch: `main
 | 5 | EC2: your first server | ⬜ |
 | 6 | S3 (weekend lab) | ⬜ |
 | 7 | EBS, pricing models, Week 1 review | ⬜ |
-| 8+ | Week 2: VPC, Route 53, CloudFront, security services | 🔜 next |
+| 8 | VPC: your private network | ⬜ |
+| 9 | Build a VPC from scratch + firewalls | ⬜ |
+| 10 | DNS, Route 53 and CloudFront | ⬜ |
+| 11 | Security services: KMS, CloudTrail, GuardDuty, WAF | ⬜ |
+| 12 | Monitoring, billing tools, Well-Architected | ⬜ |
+| 13 | Weekend project: secure, monitored web app | ⬜ |
+| 14 | Week 2 review and 40-question mock exam | ⬜ |
+| 15+ | Week 3: databases, serverless, messaging | 🔜 next |
 
 Mark ✅ as you finish each day, and put your own console screenshots in [`aws-course/evidence/`](aws-course/evidence).
 

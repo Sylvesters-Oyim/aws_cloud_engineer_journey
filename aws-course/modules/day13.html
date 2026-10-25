@@ -1,0 +1,74 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 13 - Weekend Project: A Secure, Monitored Web App</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day13">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 13</span><span class="badge">Project</span><span class="badge">⏱ 3–4h</span></p><h1>Weekend Project: A Secure, Monitored Web App</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you will have</b>
+A real mini-architecture in your own account: a web server in a custom VPC, locked-down firewalls, an IAM role instead of keys, a CloudWatch alarm, a budget guard and an architecture diagram you can show on GitHub or in an interview.</div>
+
+<h2>1. The brief</h2>
+<p>You are the cloud engineer for a small business that wants a website. Requirements: <b>reachable from the internet on HTTP only</b>, <b>admin access only from your IP</b>, <b>no access keys stored on the server</b>, <b>alerts if it overloads</b>, and <b>spend capped at about USD 5</b>. Everything you need was taught in Days 1–12. Resist copy-pasting; try each step from memory, then peek at the hints.</p>
+<figure>
+<svg viewBox="0 0 700 270" role="img" aria-label="Target architecture">
+<text x="10" y="22" font-weight="700" font-size="14">Target architecture</text>
+<rect class="b" x="10" y="60" width="90" height="40" rx="8"/><text x="32" y="85" font-size="13">Users</text>
+<rect class="c" x="140" y="35" width="390" height="215" rx="12"/><text x="154" y="58" font-weight="700" font-size="13">VPC 10.0.0.0/16 (Day 9)</text>
+<rect class="a" x="160" y="75" width="230" height="160" rx="8"/><text x="172" y="96" font-size="12" font-weight="700">Public subnet + IGW route</text>
+<rect class="b" x="176" y="108" width="198" height="104" rx="8"/><text x="188" y="130" font-size="13">EC2 + nginx</text>
+<text x="188" y="150" font-size="11" class="m">SG: 80 from all, 22 from my IP</text><text x="188" y="168" font-size="11" class="m">IAM role (no keys)</text><text x="188" y="186" font-size="11" class="m">user data installs site</text>
+<rect class="b" x="420" y="75" width="100" height="44" rx="8"/><text x="436" y="102" font-size="13">S3 bucket</text>
+<line class="l" x1="100" y1="80" x2="160" y2="150"/><line class="l" x1="374" y1="130" x2="420" y2="98" stroke-dasharray="5 4"/>
+<rect class="a" x="560" y="60" width="130" height="40" rx="8"/><text x="574" y="85" font-size="12">CloudWatch alarm</text>
+<rect class="a" x="560" y="115" width="130" height="40" rx="8"/><text x="578" y="140" font-size="12">SNS → email</text>
+<rect class="a" x="560" y="170" width="130" height="40" rx="8"/><text x="590" y="195" font-size="12">Budget</text>
+<line class="l" x1="530" y1="150" x2="560" y2="80"/><line class="l" x1="625" y1="100" x2="625" y2="115"/>
+</svg><figcaption>You'll build this. Redraw it in your own words (draw.io is free) and commit it.</figcaption></figure>
+
+<h2>2. Build steps (try first, hints below)</h2>
+<ol class="steps">
+<li><b>Budget:</b> create a monthly Budget of USD 5 with email alerts at 80%. <i>(Day 2)</i></li>
+<li><b>Network:</b> VPC, public subnet, IGW, route table. <i>(Day 9)</i></li>
+<li><b>Bucket:</b> a private S3 bucket holding <code>site.html</code>. <i>(Day 6)</i></li>
+<li><b>IAM role</b> for EC2 with <b>read-only access to that one bucket</b>: write a custom least-privilege policy limited to <code>s3:GetObject</code> on <code>arn:aws:s3:::YOUR-BUCKET/*</code>. <i>(Day 3)</i></li>
+<li><b>Security group:</b> HTTP from anywhere, SSH from your IP only.</li>
+<li><b>Launch EC2</b> with the role attached and user data that pulls the page from S3 using the role (no keys!):
+<pre><code>#!/bin/bash
+dnf install -y nginx
+aws s3 cp s3://YOUR-BUCKET/site.html /usr/share/nginx/html/index.html
+systemctl enable --now nginx</code></pre></li>
+<li><b>Observe:</b> SNS topic + CPU alarm like Day 12.</li>
+<li><b>Verify like an auditor:</b> in CloudTrail find the <code>RunInstances</code> event and the instance's use of the role (<code>AssumeRole</code>).</li>
+<li><b>Attack your own work:</b> (a) try opening port 22 from the internet in a browser: it should hang; (b) try an <code>aws s3 ls</code> of a <i>different</i> bucket from the server: it must be <b>AccessDenied</b>. That proves least privilege works.</li>
+</ol>
+
+<details><summary>Hint: least-privilege policy JSON</summary>
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::YOUR-BUCKET/*"
+  }]
+}</code></pre></details>
+<details><summary>Hint: page doesn't load?</summary>Run the Day 9 troubleshooting checklist. Also check <code>sudo cat /var/log/cloud-init-output.log</code> on the server to see if user data failed.</details>
+
+<h2>3. Document it (this is what employers see)</h2>
+<p>In <code>aws-course/labs/week2-project/</code> create a <code>README.md</code> with: the diagram, what each component does and <i>why</i>, the cost you incurred, and 3 things that went wrong and how you fixed them. Add screenshots under <code>evidence/</code>.</p>
+<h2>4. Cleanup (non-negotiable)</h2>
+<p>Terminate EC2, delete alarm/SNS, bucket (empty first), role/policy, VPC. Keep the Budget. Next morning check Billing → Bills for stray items.</p>
+<h2>5. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Site loads from public IP</label></li>
+<li><label><input type="checkbox" data-id="b"> No access keys on the server (role only)</label></li>
+<li><label><input type="checkbox" data-id="c"> Other buckets denied from the server</label></li>
+<li><label><input type="checkbox" data-id="d"> Alarm fired once</label></li>
+<li><label><input type="checkbox" data-id="e"> Project README + diagram committed</label></li>
+<li><label><input type="checkbox" data-id="f"> Everything deleted</label></li>
+</ul>
+<nav class="pn"><a href="day12.html">← Day 12: Monitoring, Billing Tools and the Well-Architected Framework</a><a href="day14.html">Day 14: Week 2 Review and Mock Exam →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

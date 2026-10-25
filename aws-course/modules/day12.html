@@ -1,0 +1,86 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 12 - Monitoring, Billing Tools and the Well-Architected Framework</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day12">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 12</span><span class="badge">Operations · Lab</span><span class="badge">⏱ 1.5h</span></p><h1>Monitoring, Billing Tools and the Well-Architected Framework</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Set a CloudWatch alarm that emails you, know which tool answers which cost/monitoring question, name the Support plans, and recite the six Well-Architected pillars.</div>
+
+<h2>1. First principles: you can't fix what you can't see</h2>
+<div class="box analogy"><b class="t">Analogy: a car dashboard</b><b>CloudWatch metrics</b> are the gauges (speed, fuel). <b>Logs</b> are the black-box recorder. An <b>alarm</b> is the warning light. <b>SNS</b> is the horn that actually wakes you. <b>CloudTrail</b> (Day 11) is the CCTV showing <i>who</i> touched the car.</div>
+<table><tr><th>Service</th><th>Answers</th></tr>
+<tr><td><b>CloudWatch Metrics</b></td><td>How busy is it? (CPU, network, disk I/O). EC2 basic = every 5 min, detailed = 1 min. <b>Memory and disk-space are NOT default metrics</b>: install the CloudWatch agent.</td></tr>
+<tr><td><b>CloudWatch Logs</b></td><td>What did the app say? (collects logs from servers, Lambda…)</td></tr>
+<tr><td><b>CloudWatch Alarms</b></td><td>Tell me/do something when a metric crosses a line (notify, auto scale, reboot)</td></tr>
+<tr><td><b>EventBridge</b></td><td>When X happens (an instance stops, a schedule fires) trigger Y</td></tr>
+<tr><td><b>SNS</b></td><td>Publish a message to many subscribers (email, SMS, Lambda)</td></tr>
+<tr><td><b>CloudTrail</b></td><td>Who made which API call?</td></tr></table>
+<figure>
+<svg viewBox="0 0 700 120" role="img" aria-label="EC2 to CloudWatch alarm to SNS to email">
+<g font-size="13"><rect class="b" x="10" y="35" width="110" height="50" rx="8"/><text x="38" y="65">EC2</text>
+<rect class="a" x="170" y="35" width="140" height="50" rx="8"/><text x="186" y="58">CloudWatch</text><text x="186" y="74" font-size="11" class="m">CPU &gt; 60% ?</text>
+<rect class="b" x="360" y="35" width="110" height="50" rx="8"/><text x="388" y="65">SNS topic</text>
+<rect class="b" x="520" y="35" width="150" height="50" rx="8"/><text x="548" y="65">📧 your email</text></g>
+<line class="l" x1="120" y1="60" x2="170" y2="60"/><line class="l" x1="310" y1="60" x2="360" y2="60"/><line class="l" x1="470" y1="60" x2="520" y2="60"/>
+</svg><figcaption>The classic monitoring chain.</figcaption></figure>
+
+<h2>2. Cost and governance tools: pick the right one</h2>
+<table><tr><th>Tool</th><th>Use it to</th></tr>
+<tr><td>Pricing Calculator</td><td><b>Estimate</b> before you build</td></tr>
+<tr><td>Cost Explorer</td><td><b>See and analyse</b> past spend by service/tag</td></tr>
+<tr><td>Budgets</td><td><b>Alert/act</b> when cost or usage crosses a threshold</td></tr>
+<tr><td>Cost and Usage Report</td><td>Most detailed raw data</td></tr>
+<tr><td>Cost allocation tags</td><td>Label resources (<code>project=blog</code>) to split the bill</td></tr>
+<tr><td>Organizations</td><td>Many accounts, consolidated billing, volume discounts, SCP guardrails</td></tr>
+<tr><td>Trusted Advisor</td><td>Automated advice on cost, performance, security, fault tolerance, quotas, ops</td></tr>
+<tr><td>Health Dashboard</td><td>Is AWS having an incident that affects <i>my</i> resources?</td></tr></table>
+
+<h3>Support plans (changed recently, verify at the link)</h3>
+<p>AWS now sells <b>Basic</b> (free for everyone: docs, forums, core Trusted Advisor checks, Health Dashboard), <b>Business Support+</b> (24/7 access to AWS experts, minimum about USD 29/month per account), <b>Enterprise Support</b>, and <b>Unified Operations</b> (for mission-critical workloads). The older Developer, Business and Enterprise On-Ramp plans are being retired, but <b>older exam guides and practice tests still use those names</b>, so learn both: Developer (business hours email) → Business (24/7, full Trusted Advisor) → Enterprise (TAM, fastest response). Check <code>aws.amazon.com/premiumsupport/plans</code> and the current CLF-C02 exam guide.</p>
+
+<h2>3. The Well-Architected Framework: six pillars</h2>
+<div class="box analogy"><b class="t">Analogy: inspecting a house</b>Would you buy a house only checking the paint? You check foundations, wiring, locks, running costs and environmental impact too. The framework is that checklist for your cloud design.</div>
+<table><tr><th>Pillar</th><th>Core idea</th></tr>
+<tr><td>Operational Excellence</td><td>Automate, learn from failures, small reversible changes</td></tr>
+<tr><td>Security</td><td>Least privilege, protect data, trace everything</td></tr>
+<tr><td>Reliability</td><td>Recover from failure, scale horizontally, test recovery</td></tr>
+<tr><td>Performance Efficiency</td><td>Right resource type/size, go serverless, experiment</td></tr>
+<tr><td>Cost Optimization</td><td>Pay only for what you use, measure, retire waste</td></tr>
+<tr><td>Sustainability</td><td>Reduce environmental impact: maximise utilisation</td></tr></table>
+<p>Also know the <b>AWS Cloud Adoption Framework (CAF)</b> (people/process/tech view for migrations) and the <b>Well-Architected Tool</b> (a free console tool where you answer questions about your workload).</p>
+
+<h2>4. Lab: an alarm that emails you (45 min)</h2>
+<ol class="steps">
+<li>Launch a t3.micro/t2.micro Amazon Linux instance (default VPC is fine).</li>
+<li>SNS → <b>Topics → Create</b> (Standard), name <code>cpu-alerts</code>. Create a <b>subscription</b>: protocol Email, your address. Open your email and <b>confirm</b> the subscription.</li>
+<li>EC2 → your instance → <b>Monitoring → Manage detailed monitoring</b> (optional, 1-minute metrics). Then CloudWatch → <b>Alarms → Create alarm</b> → Select metric → EC2 → Per-Instance → <code>CPUUtilization</code> for your instance. Statistic Average, period 1–5 min, threshold <b>Greater than 40</b>. Notification: your <code>cpu-alerts</code> topic. Name it <code>high-cpu</code>.</li>
+<li>Make the server work hard. Connect with EC2 Instance Connect and run:
+<pre><code>for i in 1 2; do (while :; do :; done) &amp; done   # burns 2 CPU threads
+# later stop it with:  kill %1 %2</code></pre></li>
+<li>Within 5–10 minutes the alarm turns <b>In alarm</b> and an email arrives. Screenshot both. Then <code>kill %1 %2</code> and watch it return to OK.</li>
+<li>Bonus: CloudWatch → <b>Dashboards</b> → create a dashboard with the CPU graph.</li>
+<li><b>Cleanup:</b> delete alarm, SNS topic + subscription, terminate the instance.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day12-alarm-in-alarm.png</code> and <code>evidence/day12-alarm-email.png</code></div>
+
+<h2>5. Quiz</h2>
+<details><summary>1. Which metric is NOT collected by default for EC2?</summary>Memory utilisation (needs the CloudWatch agent).</details>
+<details><summary>2. Which tool estimates future cost? Which shows past cost?</summary>Pricing Calculator; Cost Explorer.</details>
+<details><summary>3. Which tool alerts when forecast spend passes USD 20?</summary>AWS Budgets.</details>
+<details><summary>4. Automated advice across cost, security and fault tolerance?</summary>Trusted Advisor.</details>
+<details><summary>5. Name the six Well-Architected pillars.</summary>Operational Excellence, Security, Reliability, Performance Efficiency, Cost Optimization, Sustainability.</details>
+<details><summary>6. Which service shows AWS-side outages affecting your resources?</summary>AWS Health Dashboard.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Alarm triggered and emailed me</label></li>
+<li><label><input type="checkbox" data-id="b"> I can recite the 6 pillars</label></li>
+<li><label><input type="checkbox" data-id="c"> Instance, alarm and SNS topic deleted</label></li>
+</ul>
+<nav class="pn"><a href="day11.html">← Day 11: Security Services: KMS, CloudTrail, GuardDuty, WAF</a><a href="day13.html">Day 13: Weekend Project: A Secure, Monitored Web App →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

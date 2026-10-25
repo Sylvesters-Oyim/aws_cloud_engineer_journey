@@ -1,0 +1,72 @@
+<!--meta {"n":8,"title":"VPC: Your Private Network in the Cloud","time":"1.5h","week":2,"tag":"Concepts · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain what a VPC, subnet, route table and internet gateway are, read a CIDR block like <code>10.0.0.0/16</code>, and tell a public subnet from a private one by looking at its route table.</div>
+
+<h2>1. First principles: why does a private network exist?</h2>
+<p>Your EC2 server from Week 1 lived somewhere. But where, exactly? Not "on the internet" directly. It lived inside a <b>VPC (Virtual Private Cloud)</b>: your own isolated slice of AWS's network where <i>you</i> decide the address range, who can come in and which way traffic flows.</p>
+<div class="box analogy"><b class="t">Analogy: a gated estate</b>AWS is a huge city. A <b>VPC</b> is your walled estate. <b>Subnets</b> are the buildings inside it. The <b>internet gateway</b> is the main gate. <b>Route tables</b> are the signposts that say "to reach the outside world, go through the gate". A building with a signpost to the gate is <i>public</i>. A building with no such signpost is <i>private</i>: people inside can talk to each other, but nobody outside can walk in.</div>
+
+<figure>
+<svg viewBox="0 0 700 300" role="img" aria-label="VPC with public and private subnet and internet gateway">
+<text x="10" y="24" font-weight="700" font-size="14">Internet</text>
+<rect class="b" x="260" y="10" width="180" height="34" rx="17"/><text x="300" y="32" font-size="14">🌐 Users</text>
+<line class="l" x1="350" y1="44" x2="350" y2="80"/>
+<rect class="a" x="290" y="80" width="120" height="30" rx="6"/><text x="302" y="100" font-size="13">Internet Gateway</text>
+<rect class="c" x="20" y="120" width="660" height="170" rx="12"/><text x="36" y="144" font-weight="700">VPC 10.0.0.0/16</text>
+<rect class="a" x="50" y="160" width="270" height="115" rx="8"/><text x="64" y="182" font-size="13" font-weight="700">Public subnet 10.0.1.0/24</text>
+<rect class="b" x="70" y="195" width="110" height="60" rx="6"/><text x="86" y="220" font-size="13">Web server</text><text x="86" y="238" font-size="11" class="m">public IP</text>
+<text x="196" y="228" font-size="11" class="m">route: 0.0.0.0/0 → IGW</text>
+<rect class="b" x="380" y="160" width="270" height="115" rx="8"/><text x="394" y="182" font-size="13" font-weight="700">Private subnet 10.0.2.0/24</text>
+<rect class="b" x="400" y="195" width="110" height="60" rx="6"/><text x="420" y="220" font-size="13">Database</text><text x="416" y="238" font-size="11" class="m">no public IP</text>
+<text x="526" y="228" font-size="11" class="m">route: local only</text>
+<line class="l" x1="350" y1="110" x2="180" y2="195"/>
+<line class="l" x1="180" y1="225" x2="400" y2="225" stroke-dasharray="5 4"/>
+</svg><figcaption>The web server is reachable from the internet; the database can only be reached from inside the VPC (the dashed line).</figcaption></figure>
+
+<h2>2. CIDR in 5 minutes (the only maths you need)</h2>
+<p>An IPv4 address is 32 bits, shown as four numbers, e.g. <code>10.0.1.25</code>. A <b>CIDR block</b> like <code>10.0.0.0/16</code> says "the first 16 bits are fixed (the network), the remaining 16 bits are free for hosts". <b>The bigger the slash number, the smaller the network.</b></p>
+<table><tr><th>CIDR</th><th>Free bits</th><th>Total IPs</th><th>Usable in AWS*</th><th>Typical use</th></tr>
+<tr><td>/16</td><td>16</td><td>65,536</td><td>65,531</td><td>Whole VPC (largest allowed)</td></tr>
+<tr><td>/24</td><td>8</td><td>256</td><td>251</td><td>A normal subnet</td></tr>
+<tr><td>/28</td><td>4</td><td>16</td><td>11</td><td>Tiny subnet (smallest allowed)</td></tr></table>
+<p>Formula: total IPs = 2<sup>(32 − slash)</sup>. *AWS reserves <b>5 addresses per subnet</b> (network, router, DNS, future use, broadcast). That is a classic exam question.</p>
+<div class="box analogy"><b class="t">Analogy: phone numbers</b><code>/16</code> is like owning every number starting with <code>0712</code>. <code>/24</code> is like owning only <code>0712-345-xxx</code>. Fewer free digits, fewer numbers.</div>
+<p><b>Private ranges you should use</b> for a VPC (RFC 1918): <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>. Choose ranges that don't overlap with your office or other VPCs, or you can't connect them later.</p>
+
+<h2>3. The five building blocks</h2>
+<table><tr><th>Piece</th><th>What it is</th><th>Scope</th></tr>
+<tr><td><b>VPC</b></td><td>Your isolated network, one CIDR block</td><td>One Region</td></tr>
+<tr><td><b>Subnet</b></td><td>A slice of the VPC's addresses</td><td>Exactly <b>one AZ</b></td></tr>
+<tr><td><b>Route table</b></td><td>Rules: "traffic for X goes to Y"</td><td>Attached to subnets</td></tr>
+<tr><td><b>Internet Gateway (IGW)</b></td><td>Two-way door between VPC and internet</td><td>One per VPC</td></tr>
+<tr><td><b>Security group / NACL</b></td><td>Firewalls (tomorrow)</td><td>Instance / subnet</td></tr></table>
+<div class="box exam"><b class="t">Exam focus</b>"What makes a subnet public?" Answer: its route table has a route <code>0.0.0.0/0</code> to an <b>Internet Gateway</b> (and the instance has a public IP). Nothing else. Names like "public" are just labels.</div>
+
+<h2>4. Lab: explore the default VPC</h2>
+<p>Every Region of your account already has a <b>default VPC</b> (<code>172.31.0.0/16</code>) with one public subnet per AZ. Your Day 5 server used it. Let's look inside.</p>
+<ol class="steps">
+<li>Console → search <b>VPC</b> → <b>Your VPCs</b>. Note the default VPC and its CIDR.</li>
+<li><b>Subnets</b>: how many are there? Which AZ is each in? Compute the number of IPs in one subnet from its CIDR (a <code>/20</code> gives 2<sup>12</sup> = 4096).</li>
+<li><b>Route tables</b> → default one → <b>Routes</b> tab. Find the line <code>0.0.0.0/0 → igw-…</code>. That one line makes the subnets public.</li>
+<li><b>Internet gateways</b>: confirm one is attached to the default VPC.</li>
+<li>In CloudShell, same facts via CLI:
+<pre><code>aws ec2 describe-vpcs --query 'Vpcs[].[VpcId,CidrBlock,IsDefault]' --output table
+aws ec2 describe-subnets --query 'Subnets[].[SubnetId,AvailabilityZone,CidrBlock,AvailableIpAddressCount]' --output table</code></pre></li>
+<li>Draw (on paper is fine) your default VPC: boxes for each AZ and the IGW. Photograph it as evidence.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day08-default-vpc-routes.png</code> (blur the account ID)</div>
+<div class="box warn"><b class="t">Cost safety</b>Nothing in this lab costs money. Do <b>not</b> delete the default VPC. (If you ever do, you can recreate it: VPC → Actions → Create default VPC.)</div>
+
+<h2>5. Quiz</h2>
+<details><summary>1. How many usable IPs in a /24 subnet in AWS?</summary>256 − 5 reserved = 251.</details>
+<details><summary>2. A subnet spans how many AZs?</summary>Exactly one.</details>
+<details><summary>3. What makes a subnet "public"?</summary>A route to an Internet Gateway (0.0.0.0/0 → igw).</details>
+<details><summary>4. Can two VPCs with the same CIDR be peered?</summary>No. Overlapping CIDRs cannot be peered.</details>
+<details><summary>5. What is the largest and smallest VPC CIDR size?</summary>/16 largest, /28 smallest.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> I can explain public vs private subnet using route tables</label></li>
+<li><label><input type="checkbox" data-id="b"> I calculated the IPs of a /20 and a /28 by hand</label></li>
+<li><label><input type="checkbox" data-id="c"> Evidence screenshot saved</label></li>
+</ul>

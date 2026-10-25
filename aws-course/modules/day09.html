@@ -1,0 +1,72 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 9 - Build a VPC from Scratch + Firewalls</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day9">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 9</span><span class="badge">Lab · Security</span><span class="badge">⏱ 2h</span></p><h1>Build a VPC from Scratch + Firewalls</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Build a two-subnet VPC by hand, launch a server in it, explain security groups vs NACLs, and know when a NAT gateway or VPC endpoint is needed.</div>
+
+<h2>1. Two firewalls, two different jobs</h2>
+<div class="box analogy"><b class="t">Analogy: airport security</b>A <b>security group</b> is the bouncer at the door of one room (an instance): it checks the guest list, and if you were let in, you're let out without being re-checked (<b>stateful</b>). A <b>NACL</b> is the checkpoint at the corridor entrance (a subnet): it checks <i>every</i> person both ways, entering and leaving (<b>stateless</b>), and can explicitly ban people.</div>
+<table><tr><th></th><th>Security group</th><th>Network ACL (NACL)</th></tr>
+<tr><td>Level</td><td>Instance / network interface</td><td>Subnet</td></tr>
+<tr><td>State</td><td><b>Stateful</b> (return traffic auto-allowed)</td><td><b>Stateless</b> (must allow both directions)</td></tr>
+<tr><td>Rules</td><td><b>Allow</b> only</td><td>Allow <b>and Deny</b>, evaluated by rule number</td></tr>
+<tr><td>Default</td><td>Deny all inbound, allow all outbound</td><td>Default NACL allows everything</td></tr></table>
+<div class="box exam"><b class="t">Exam focus</b>"Block one malicious IP address" → <b>NACL</b> (only NACLs can deny). "Allow web traffic to my servers" → <b>security group</b>. Security groups can reference <i>other security groups</i> (e.g. DB allows only the web tier's group).</div>
+
+<h2>2. Getting private things online: NAT and endpoints</h2>
+<p>A private database sometimes needs to <i>fetch</i> updates from the internet but must never be reachable <i>from</i> it. A <b>NAT Gateway</b> sits in a public subnet and lets private instances start outbound connections; replies come back, but strangers can't initiate. <i>Analogy: a hotel switchboard. Guests can call out through the front desk, but outsiders can't dial a room directly.</i></p>
+<p>A <b>VPC endpoint</b> goes one better: private access to AWS services (like S3) without leaving AWS's network at all. <b>Gateway endpoints</b> (S3 and DynamoDB) are free. <b>Interface endpoints</b> (PrivateLink) cost per hour.</p>
+<div class="box warn"><b class="t">Cost safety</b>A NAT Gateway bills <b>per hour (about USD 0.045 in many Regions) plus per GB</b>, even when idle. Check current pricing, and in this course we only create one for a few minutes, then delete it. Also release any Elastic IP afterwards (public IPv4 addresses are billed too).</div>
+
+<h2>3. Lab: your own VPC (about 60 minutes)</h2>
+<p>Goal: VPC <code>10.0.0.0/16</code> with a public subnet <code>10.0.1.0/24</code> and a private subnet <code>10.0.2.0/24</code>, a web server in the public one.</p>
+<ol class="steps">
+<li><b>Create VPC</b>: VPC → Create VPC → <i>VPC only</i>. Name <code>lab-vpc</code>, CIDR <code>10.0.0.0/16</code>.</li>
+<li><b>Create 2 subnets</b> in <code>lab-vpc</code>, both in the same AZ for now: <code>public-1</code> = <code>10.0.1.0/24</code>, <code>private-1</code> = <code>10.0.2.0/24</code>. On <code>public-1</code> → Actions → <i>Edit subnet settings</i> → enable <b>auto-assign public IPv4</b>.</li>
+<li><b>Internet gateway</b>: create <code>lab-igw</code>, then Actions → <b>Attach to VPC</b> <code>lab-vpc</code>.</li>
+<li><b>Route table</b>: create <code>public-rt</code> in <code>lab-vpc</code>. Add route <code>0.0.0.0/0 → lab-igw</code>. Under <i>Subnet associations</i> attach <code>public-1</code>. Leave <code>private-1</code> on the VPC's main route table (local only).</li>
+<li><b>Security group</b> <code>web-sg</code> in <code>lab-vpc</code>: inbound HTTP 80 from anywhere, SSH 22 from <b>My IP</b> only.</li>
+<li><b>Launch an EC2</b> (Amazon Linux, t2/t3.micro) in <code>lab-vpc</code> → <code>public-1</code>, using <code>web-sg</code>. In Advanced → User data, paste:
+<pre><code>#!/bin/bash
+dnf install -y nginx
+echo "&lt;h1&gt;Hello from my own VPC&lt;/h1&gt;" &gt; /usr/share/nginx/html/index.html
+systemctl enable --now nginx</code></pre></li>
+<li>Open the instance's public IP in a browser (<code>http://…</code>). You should see your page. 🎉</li>
+<li><b>Break it on purpose</b> (this is how you really learn): remove the <code>0.0.0.0/0 → igw</code> route. Reload: it hangs. Add it back. Then remove port 80 from the security group: hangs again. You now know the two usual culprits.</li>
+<li><b>Optional (5 minutes, costs pennies):</b> create a NAT gateway in <code>public-1</code> with a new Elastic IP, point a <code>private-rt</code> default route at it, then <b>immediately delete the NAT gateway and release the Elastic IP</b>.</li>
+<li><b>Cleanup, in this order:</b> terminate the instance → delete NAT/EIP if made → detach & delete IGW → delete subnets → delete route tables (non-main) → delete security group → delete VPC. (The VPC's "Delete VPC" wizard can remove most of these for you.)</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day09-vpc-resource-map.png</code> (VPC → your VPC → <i>Resource map</i> tab) and <code>evidence/day09-hello-page.png</code></div>
+
+<h3>Troubleshooting checklist (memorise, you will use it forever)</h3>
+<ol><li>Is the instance in a subnet whose route table points to an IGW?</li><li>Does it have a public IP?</li><li>Does the security group allow the port from your IP?</li><li>Does the NACL allow it in <i>and</i> out?</li><li>Is the service actually running on the instance?</li></ol>
+
+<h2>4. Connecting networks (know the names)</h2>
+<table><tr><th>Need</th><th>Service</th></tr>
+<tr><td>Connect two VPCs</td><td><b>VPC peering</b> (1-to-1, non-transitive)</td></tr>
+<tr><td>Connect many VPCs and on-premises through a hub</td><td><b>Transit Gateway</b></td></tr>
+<tr><td>Encrypted tunnel over internet to your office</td><td><b>Site-to-Site VPN</b></td></tr>
+<tr><td>Dedicated private cable to AWS</td><td><b>Direct Connect</b></td></tr></table>
+
+<h2>5. Quiz</h2>
+<details><summary>1. Which firewall is stateless?</summary>The network ACL.</details>
+<details><summary>2. How do you block a single IP address range?</summary>NACL deny rule.</details>
+<details><summary>3. A private instance must download patches but be unreachable from the internet. Which service?</summary>NAT Gateway (in a public subnet).</details>
+<details><summary>4. Private S3 access with no internet and no hourly cost?</summary>Gateway VPC endpoint for S3.</details>
+<details><summary>5. VPC A peers with B, B peers with C. Can A reach C?</summary>No. Peering is not transitive; use Transit Gateway.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Served a web page from my own VPC</label></li>
+<li><label><input type="checkbox" data-id="b"> Broke and fixed route + security group</label></li>
+<li><label><input type="checkbox" data-id="c"> Deleted NAT gateway, Elastic IPs, instance and VPC</label></li>
+</ul>
+<nav class="pn"><a href="day08.html">← Day 8: VPC: Your Private Network in the Cloud</a><a href="day10.html">Day 10: DNS, Route 53 and CloudFront →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>
