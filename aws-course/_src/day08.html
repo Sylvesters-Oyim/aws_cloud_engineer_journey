@@ -1,0 +1,84 @@
+<!--meta {"n":8,"title":"VPC: Your Private Network in the Cloud","time":"2h","week":2,"tag":"Concepts · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Build a VPC from scratch with public and private subnets, explain what makes a subnet "public", and say why a NAT gateway exists. This is the single most tested topic on the Solutions Architect exam, so we start it now.</div>
+
+<h2>1. First principles: why does a network need to be "yours"?</h2>
+<p>Thousands of customers run on the same AWS hardware. Without a boundary, your database could be reachable by a stranger's server. A <b>VPC (Virtual Private Cloud)</b> is a logically isolated network that only you control: you pick the IP range, split it into pieces, and decide what can talk to what and to the internet.</p>
+<div class="box analogy"><b class="t">Analogy: an office building you rent</b>The <b>VPC</b> is the building. <b>Subnets</b> are floors (each floor sits in one AZ's wing). The <b>Internet Gateway</b> is the front door to the street. The <b>route table</b> is the signage telling people which way to go. A <b>NAT gateway</b> is the mailroom: staff in the back office can send letters out and receive replies, but strangers can't walk in. <b>Security groups</b> are the guard on each room's door.</div>
+
+<h2>2. The building blocks</h2>
+<table>
+<tr><th>Piece</th><th>What it does</th><th>Remember</th></tr>
+<tr><td><b>CIDR block</b></td><td>The VPC's IP range, e.g. <code>10.0.0.0/16</code> (65,536 addresses)</td><td>Bigger number after / = smaller network. /16 to /28 allowed.</td></tr>
+<tr><td><b>Subnet</b></td><td>A slice of the VPC in <b>one AZ</b>, e.g. <code>10.0.1.0/24</code></td><td>AWS reserves 5 addresses per subnet.</td></tr>
+<tr><td><b>Route table</b></td><td>Rules: "traffic for X goes to Y"</td><td>Every subnet is associated with one.</td></tr>
+<tr><td><b>Internet Gateway (IGW)</b></td><td>Door between VPC and the internet</td><td>One per VPC, free, highly available.</td></tr>
+<tr><td><b>NAT Gateway</b></td><td>Lets private instances reach out (updates) but blocks inbound</td><td>Lives in a <i>public</i> subnet. Costs ~USD 0.045/hour plus data. Delete after labs!</td></tr>
+<tr><td><b>Security Group</b></td><td>Firewall on the instance. <b>Stateful</b>, allow rules only.</td><td>Reply traffic is auto-allowed.</td></tr>
+<tr><td><b>Network ACL</b></td><td>Firewall on the subnet. <b>Stateless</b>, allow + deny, numbered rules.</td><td>You must allow return traffic yourself.</td></tr>
+</table>
+
+<div class="box why"><b class="t">The one sentence that unlocks VPC</b>A subnet is <b>public</b> if and only if its route table has a route <code>0.0.0.0/0 → Internet Gateway</code>. Nothing else makes it public. A subnet with no such route is <b>private</b>.</div>
+
+<figure>
+<svg viewBox="0 0 720 330" role="img" aria-label="VPC with a public and a private subnet, an internet gateway and a NAT gateway">
+<text x="360" y="18" text-anchor="middle" font-weight="700">The internet</text>
+<rect class="b" x="300" y="26" width="120" height="30" rx="15"/><text x="360" y="46" text-anchor="middle" font-size="13">Internet Gateway</text>
+<rect class="c" x="20" y="70" width="680" height="245" rx="12"/><text x="36" y="94" font-weight="700">VPC 10.0.0.0/16</text>
+<rect class="a" x="40" y="108" width="300" height="190" rx="8"/><text x="54" y="130" font-size="14" font-weight="700">Public subnet 10.0.1.0/24 (AZ a)</text>
+<text x="54" y="148" font-size="12" class="m">route: 0.0.0.0/0 → IGW</text>
+<rect class="b" x="54" y="160" width="130" height="40" rx="6"/><text x="64" y="185" font-size="13">Web server</text>
+<rect class="b" x="200" y="160" width="124" height="40" rx="6"/><text x="212" y="185" font-size="13">NAT Gateway</text>
+<rect class="a" x="380" y="108" width="300" height="190" rx="8"/><text x="394" y="130" font-size="14" font-weight="700">Private subnet 10.0.2.0/24 (AZ a)</text>
+<text x="394" y="148" font-size="12" class="m">route: 0.0.0.0/0 → NAT</text>
+<rect class="b" x="394" y="160" width="130" height="40" rx="6"/><text x="404" y="185" font-size="13">App server</text>
+<rect class="b" x="540" y="160" width="124" height="40" rx="6"/><text x="560" y="185" font-size="13">Database</text>
+<path d="M360 56 L360 108" stroke="currentColor" stroke-width="2" fill="none"/>
+<path d="M394 190 C 360 235, 270 235, 262 202" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="5 4"/>
+<text x="330" y="252" font-size="12" class="m" text-anchor="middle">outbound only via NAT</text>
+</svg><figcaption>Users reach the web server via the IGW. The app and database sit in the private subnet, unreachable from the internet but able to fetch updates through the NAT gateway.</figcaption></figure>
+
+<h2>3. Security groups vs NACLs (guaranteed exam question)</h2>
+<table>
+<tr><th></th><th>Security Group</th><th>Network ACL</th></tr>
+<tr><td>Level</td><td>Instance (ENI)</td><td>Subnet</td></tr>
+<tr><td>State</td><td>Stateful</td><td>Stateless</td></tr>
+<tr><td>Rules</td><td>Allow only</td><td>Allow and Deny</td></tr>
+<tr><td>Default</td><td>All inbound denied, all outbound allowed</td><td>Default NACL allows everything</td></tr>
+</table>
+<p>Analogy: the security group is the bouncer who remembers you went out for a smoke and lets you back in. The NACL is a checkpoint at the building gate that checks your ticket every single time, in both directions.</p>
+
+<h2>4. Lab (60 min): build it yourself, the manual way</h2>
+<div class="box warn"><b class="t">Cost safety</b>Steps 1 to 6 are free. The NAT gateway in step 7 costs money per hour, so do it last, take your screenshot, and delete it straight away.</div>
+<ol class="steps">
+<li>Console → <b>VPC → Create VPC → "VPC only"</b>. Name <code>lab-vpc</code>, IPv4 CIDR <code>10.0.0.0/16</code>.</li>
+<li><b>Subnets → Create subnet</b> in <code>lab-vpc</code>: <code>public-a</code> = <code>10.0.1.0/24</code> in AZ <code>a</code>, and <code>private-a</code> = <code>10.0.2.0/24</code> in the same AZ.</li>
+<li><b>Internet gateways → Create</b> <code>lab-igw</code>, then <b>Actions → Attach to VPC</b> <code>lab-vpc</code>.</li>
+<li><b>Route tables → Create</b> <code>public-rt</code> in <code>lab-vpc</code>. Edit routes: add <code>0.0.0.0/0</code> → <code>lab-igw</code>. Subnet associations: attach <code>public-a</code>.
+<br>Now ask yourself: which subnet is public, and why? (Look at the one sentence in section 2.)</li>
+<li>On <code>public-a</code>: <b>Edit subnet settings → enable auto-assign public IPv4</b>.</li>
+<li>Launch a <code>t2.micro</code>/<code>t3.micro</code> Amazon Linux instance in <code>public-a</code>, with a new security group allowing SSH (22) from <b>My IP</b> only. Connect with EC2 Instance Connect and run <code>curl -s https://checkip.amazonaws.com</code>. It works, so you have internet.</li>
+<li>Launch a second instance in <code>private-a</code> with no public IP (security group: allow SSH from the web server's security group). From the web server, SSH to its private IP. From your laptop, notice you <i>can't</i> reach it directly. That is isolation.</li>
+<li><b>NAT (short, then delete):</b> NAT gateways → Create in <code>public-a</code> with a new Elastic IP. Create <code>private-rt</code> with <code>0.0.0.0/0</code> → NAT, associate <code>private-a</code>. Screenshot the route table. Then <b>delete the NAT gateway, release the Elastic IP</b>.</li>
+<li><b>Cleanup:</b> terminate both instances, delete NAT (if not already), release Elastic IP, detach and delete the IGW, delete subnets, route tables, and finally the VPC. (Deleting the VPC last is the order AWS enforces anyway.)</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day08-vpc-resource-map.png</code> (VPC → your VPC → <b>Resource map</b> tab shows the whole picture) and <code>evidence/day08-route-table.png</code></div>
+
+<h2>5. Exam-style quiz (10 min)</h2>
+<details><summary>1. What makes a subnet public?</summary>A route to an Internet Gateway (0.0.0.0/0 → igw-...).</details>
+<details><summary>2. Instances in a private subnet need to download OS patches. Which service?</summary>A NAT Gateway placed in a public subnet.</details>
+<details><summary>3. Is a security group stateful or stateless?</summary>Stateful. Return traffic is automatically allowed.</details>
+<details><summary>4. You must explicitly block one malicious IP address. Which tool?</summary>A Network ACL deny rule (security groups can't deny).</details>
+<details><summary>5. How many addresses does AWS reserve in each subnet?</summary>Five.</details>
+<details><summary>6. Can one subnet span two Availability Zones?</summary>No. A subnet lives in exactly one AZ.</details>
+<details><summary>7. Which CIDR holds more addresses: /16 or /24?</summary>/16 (65,536 vs 256).</details>
+<details><summary>8. Which is the shared responsibility split for a VPC firewall config?</summary>The customer configures security groups, NACLs and routes; AWS runs the underlying network.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Built the VPC with a public and a private subnet</label></li>
+<li><label><input type="checkbox" data-id="b"> Explained to myself (out loud!) what makes a subnet public</label></li>
+<li><label><input type="checkbox" data-id="c"> NAT gateway and Elastic IP deleted</label></li>
+<li><label><input type="checkbox" data-id="d"> Resource map screenshot saved in evidence/</label></li>
+<li><label><input type="checkbox" data-id="e"> Quiz ≥ 6/8</label></li>
+</ul>
