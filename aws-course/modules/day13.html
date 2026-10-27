@@ -1,0 +1,63 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 13 - Weekend Project: Two-Tier Network Architecture</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day13">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 13</span><span class="badge">Weekend lab</span><span class="badge">⏱ 4h</span></p><h1>Weekend Project: Two-Tier Network Architecture</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Design and build a realistic two-tier architecture (public web tier, private app tier) across two Availability Zones, document it with a diagram, and explain every design choice, which is exactly what SAA-style exam questions and job interviews ask.</div>
+
+<h2>1. The mission</h2>
+<p>You are the new cloud engineer at a small company. The boss wants a website where the <b>web server is reachable by the public</b> but the <b>app/database server is hidden</b>, and the whole thing must survive the loss of one AZ's subnet. You will build the network skeleton and prove each rule works.</p>
+<div class="box analogy"><b class="t">Analogy: a restaurant</b>The dining room (public subnet) faces the street; the kitchen (private subnet) is behind a staff-only door. Customers talk only to waiters; the kitchen talks only to waiters. Two identical restaurants in different streets (AZs) mean one flood doesn't close the business.</div>
+<figure>
+<svg viewBox="0 0 700 330" role="img" aria-label="Two-tier architecture across two AZs">
+<rect class="c" x="20" y="20" width="660" height="290" rx="12"/><text x="36" y="46" font-weight="700">VPC 10.0.0.0/16</text>
+<rect class="a" x="40" y="62" width="300" height="100" rx="8"/><text x="52" y="84" font-size="13" font-weight="700">AZ a · public 10.0.1.0/24</text><rect class="b" x="60" y="98" width="120" height="40" rx="4"/><text x="72" y="123" font-size="12">Web server</text><rect class="b" x="200" y="98" width="120" height="40" rx="4"/><text x="214" y="123" font-size="12">(NAT, optional)</text>
+<rect class="a" x="360" y="62" width="300" height="100" rx="8"/><text x="372" y="84" font-size="13" font-weight="700">AZ b · public 10.0.3.0/24</text><rect class="b" x="380" y="98" width="120" height="40" rx="4"/><text x="392" y="123" font-size="12">Web server</text>
+<rect class="b" x="40" y="190" width="300" height="100" rx="8"/><text x="52" y="212" font-size="13" font-weight="700">AZ a · private 10.0.2.0/24</text><rect class="a" x="60" y="228" width="120" height="40" rx="4"/><text x="72" y="253" font-size="12">App server</text>
+<rect class="b" x="360" y="190" width="300" height="100" rx="8"/><text x="372" y="212" font-size="13" font-weight="700">AZ b · private 10.0.4.0/24</text><rect class="a" x="380" y="228" width="120" height="40" rx="4"/><text x="392" y="253" font-size="12">App server</text>
+<text x="520" y="123" font-size="12" class="m">← IGW on VPC</text><text x="520" y="253" font-size="12" class="m">No route to IGW</text>
+</svg><figcaption>Web tier security group: 80/443 from anywhere. App tier security group: app port only from the web-tier security group.</figcaption></figure>
+
+<h2>2. Build (3 hours, in 4 blocks)</h2>
+<ol class="steps">
+<li><b>Network (60 min):</b> VPC <code>10.0.0.0/16</code>; four /24 subnets as in the diagram; one IGW; <code>public-rt</code> (route to IGW) associated with both public subnets; private subnets on a private route table with no internet route.</li>
+<li><b>Firewalls (30 min):</b> <code>web-sg</code> (HTTP from anywhere, SSH from My IP), <code>app-sg</code> (TCP 8080 from <code>web-sg</code> only, no public source).</li>
+<li><b>Servers (45 min):</b> a web instance in each public subnet (nginx via user data as on Day 9, show the instance's AZ on the page using the metadata service: <code>curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone</code> may need IMDSv2 token headers). One tiny app instance in a private subnet running <code>python3 -m http.server 8080</code>.</li>
+<li><b>Prove it (45 min):</b> fill in this table with evidence:
+<table>
+<tr><th>Test</th><th>Expected</th><th>Result</th></tr>
+<tr><td>Browser → web server public IP:80</td><td>Page loads</td><td></td></tr>
+<tr><td>Browser → app server private IP:8080</td><td>Unreachable (no public IP)</td><td></td></tr>
+<tr><td>SSH into web server, then <code>curl &lt;app-private-ip&gt;:8080</code></td><td>Works</td><td></td></tr>
+<tr><td>Remove the app-sg rule → repeat curl</td><td>Times out</td><td></td></tr>
+<tr><td>Stop web server in AZ a → browse to AZ b server</td><td>Still works</td><td></td></tr>
+</table></li>
+</ol>
+
+<h2>3. Stretch goals (if time allows)</h2>
+<ul>
+<li>Put an <b>Application Load Balancer</b> across both public subnets pointing at both web servers (preview of Week 3). ALBs cost about USD 0.0225/hour, so delete after testing.</li>
+<li>Add a <b>NACL</b> deny rule for your own IP and watch the page become unreachable; then remove it.</li>
+<li>Enable <b>VPC Flow Logs</b> to CloudWatch for 10 minutes and read a rejected packet.</li>
+</ul>
+
+<h2>4. Document it (30 min): your portfolio piece</h2>
+<p>Create <code>aws-course/labs/week2-two-tier/README.md</code> with: the diagram (export from the console's <i>Resource map</i> or use the SVG above), CIDR table, security group rules, the test table, and <b>three things that went wrong and how you fixed them</b>. Recruiters read this more than any certificate.</p>
+<div class="shot">📸 Evidence: <code>evidence/day13-resource-map.png</code>, <code>evidence/day13-both-azs.png</code>, <code>evidence/day13-app-unreachable.png</code></div>
+
+<h2>5. Cleanup checklist (do not skip)</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> All EC2 instances terminated</label></li>
+<li><label><input type="checkbox" data-id="b"> Load balancer, NAT gateway and Elastic IPs deleted</label></li>
+<li><label><input type="checkbox" data-id="c"> VPC deleted</label></li>
+<li><label><input type="checkbox" data-id="d"> Billing page shows no running services</label></li>
+<li><label><input type="checkbox" data-id="e"> Lab README committed to GitHub</label></li>
+</ul>
+<nav class="pn"><a href="day12.html">← Day 12: Security and Compliance Services</a><a href="day14.html">Day 14: Week 2 Review and Mock Exam →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

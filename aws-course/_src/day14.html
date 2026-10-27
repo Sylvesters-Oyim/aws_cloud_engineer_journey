@@ -1,0 +1,62 @@
+<!--meta {"n":14,"title":"Week 2 Review and Mock Exam","time":"2–3h","week":2,"tag":"Review · Quiz"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Pass a 20-question mixed review at 80%+, explain Week 2 to a friend using analogies, and have your progress committed to GitHub.</div>
+
+<h2>1. One-page memory map</h2>
+<table>
+<tr><th>Topic</th><th>Remember this</th></tr>
+<tr><td>VPC</td><td>Region-wide network; subnets are AZ-bound; AWS reserves 5 IPs/subnet; /16 to /28</td></tr>
+<tr><td>Public subnet</td><td>Route <code>0.0.0.0/0 → IGW</code> + public IP</td></tr>
+<tr><td>NAT gateway</td><td>Private → internet outbound only; lives in a public subnet; costs money</td></tr>
+<tr><td>Security group vs NACL</td><td>Stateful/allow-only/instance vs stateless/allow+deny/subnet</td></tr>
+<tr><td>Endpoints</td><td>Gateway (S3, DynamoDB, free) vs Interface (PrivateLink, paid)</td></tr>
+<tr><td>Route 53</td><td>DNS + routing policies + health checks; Alias works at the root</td></tr>
+<tr><td>CloudFront</td><td>CDN via edge locations; OAC keeps S3 private; invalidate to refresh</td></tr>
+<tr><td>Security services</td><td>Shield=DDoS, WAF=web rules, GuardDuty=threats, Inspector=vulns, Macie=PII, CloudTrail=who did what, Config=what changed, KMS=keys, Artifact=compliance reports</td></tr>
+</table>
+
+<h2>2. Teach-back (the Feynman technique, 15 min)</h2>
+<p>Without notes, explain aloud (or write in 3 sentences each): <i>What is a VPC? Why is a subnet public? What does NAT do? What is the difference between CloudTrail and CloudWatch?</i> Wherever you stumble is what to revisit today.</p>
+
+<h2>3. Mock exam (20 questions, 30 minutes, no notes)</h2>
+<details><summary>1. How many usable IPs in a /28 subnet?</summary>11 (16 − 5).</details>
+<details><summary>2. Which resource makes a subnet public?</summary>A route to an internet gateway (plus public IP).</details>
+<details><summary>3. Which firewall can explicitly deny traffic?</summary>Network ACL.</details>
+<details><summary>4. A private instance must download updates. Solution?</summary>NAT gateway in public subnet.</details>
+<details><summary>5. Cheapest way for private instances to reach S3?</summary>Gateway endpoint.</details>
+<details><summary>6. Two VPCs need to talk privately. Simplest option?</summary>VPC peering (use Transit Gateway for many VPCs).</details>
+<details><summary>7. Encrypted private line from office to AWS over the internet?</summary>Site-to-Site VPN.</details>
+<details><summary>8. Dedicated fibre from office to AWS?</summary>Direct Connect.</details>
+<details><summary>9. Route 53 policy for disaster recovery?</summary>Failover.</details>
+<details><summary>10. Route 53 policy for lowest delay across Regions?</summary>Latency.</details>
+<details><summary>11. Which record is used for the zone apex pointing to an ALB?</summary>Alias A record.</details>
+<details><summary>12. What does CloudFront cache at?</summary>Edge locations.</details>
+<details><summary>13. Keep an S3 origin private behind CloudFront?</summary>Origin Access Control.</details>
+<details><summary>14. DDoS protection included free for all customers?</summary>Shield Standard.</details>
+<details><summary>15. Filter malicious HTTP requests like SQL injection?</summary>WAF.</details>
+<details><summary>16. Record of every API call in your account?</summary>CloudTrail.</details>
+<details><summary>17. Continuous threat detection from logs?</summary>GuardDuty.</details>
+<details><summary>18. Who is responsible for patching the guest OS on EC2?</summary>The customer.</details>
+<details><summary>19. Where do you download AWS compliance reports?</summary>AWS Artifact.</details>
+<details><summary>20. A security group allows inbound 80. Do you also add an outbound rule for the reply?</summary>No, security groups are stateful.</details>
+<p><b>Scoring:</b> 16+ = move on. 12–15 = redo Days 8, 10 or 12 labs quickly. Below 12 = repeat Day 9's build from memory.</p>
+
+<h2>4. Commit your progress</h2>
+<pre><code>cd ~/aws_cloud_engineer_journey
+git checkout -b week-2-notes
+# add evidence screenshots and aws-course/labs/week2-two-tier/README.md
+git add aws-course
+git diff --staged | grep -i -E "AKIA|secret|BEGIN RSA" &amp;&amp; echo "STOP: secrets found!"
+git commit -m "Week 2 complete: VPC, Route 53, CloudFront, security"
+git push -u origin week-2-notes</code></pre>
+<p>Tick the days off in the repo <code>README.md</code> tracker. Write your 5-sentence reflection.</p>
+
+<h2>5. Looking ahead</h2>
+<p><b>Week 3:</b> Databases (RDS, Aurora, DynamoDB), load balancing and Auto Scaling, monitoring with CloudWatch. <b>Week 4:</b> Billing, support plans, Well-Architected Framework, then <b>book your CLF-C02 exam</b> and take practice tests.</p>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Mock exam ≥ 16/20</label></li>
+<li><label><input type="checkbox" data-id="b"> Teach-back done without notes</label></li>
+<li><label><input type="checkbox" data-id="c"> Week 2 pushed to GitHub, README tracker updated</label></li>
+</ul>

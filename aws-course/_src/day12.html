@@ -1,0 +1,69 @@
+<!--meta {"n":12,"title":"Security and Compliance Services","time":"1.5–2h","week":2,"tag":"Concepts · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Match the right AWS security service to a scenario (30% of the Cloud Practitioner exam is security!), encrypt with KMS, and find out "who did what" with CloudTrail.</div>
+
+<h2>1. First principles: the four security questions</h2>
+<p>Almost every AWS security service answers one of four questions. Learn the questions and the service names stick.</p>
+<div class="box analogy"><b class="t">Analogy: protecting a shop</b>Locks and keys (<b>IAM, KMS</b>) · Security guard at the door filtering bad customers (<b>WAF, Shield, firewalls</b>) · CCTV cameras recording everything (<b>CloudTrail, Config, CloudWatch</b>) · A security consultant who walks the shop looking for weaknesses and alarms when a thief appears (<b>Inspector, GuardDuty, Macie, Trusted Advisor</b>).</div>
+
+<h2>2. The cheat sheet</h2>
+<table>
+<tr><th>Question</th><th>Service</th><th>One-liner</th></tr>
+<tr><td rowspan="3"><b>Who can do what?</b></td><td>IAM</td><td>Users, roles, policies (Day 3)</td></tr>
+<tr><td>IAM Identity Center</td><td>Single sign-on across accounts</td></tr>
+<tr><td>Organizations + SCPs</td><td>Guardrails over many accounts</td></tr>
+<tr><td rowspan="3"><b>How do I protect data?</b></td><td>KMS</td><td>Create and control encryption keys</td></tr>
+<tr><td>Secrets Manager</td><td>Store and rotate passwords/API keys</td></tr>
+<tr><td>ACM</td><td>Free TLS/HTTPS certificates</td></tr>
+<tr><td rowspan="3"><b>How do I block attacks?</b></td><td>Shield</td><td>DDoS protection. Standard = free and automatic; Advanced = paid, with 24/7 response team</td></tr>
+<tr><td>WAF</td><td>Web firewall (layer 7): blocks SQL injection, bad bots, rate-limits</td></tr>
+<tr><td>Security groups / NACLs</td><td>Network firewalls (Day 10)</td></tr>
+<tr><td rowspan="5"><b>What happened / what is wrong?</b></td><td>CloudTrail</td><td><b>Audit log of API calls</b>: who, what, when, from where</td></tr>
+<tr><td>CloudWatch</td><td>Metrics, logs, alarms (is it healthy?)</td></tr>
+<tr><td>Config</td><td>History of resource configuration + compliance rules</td></tr>
+<tr><td>GuardDuty</td><td>Threat detection by analysing logs (crypto-mining, odd logins)</td></tr>
+<tr><td>Inspector / Macie</td><td>Inspector scans EC2/containers/Lambda for vulnerabilities. Macie finds sensitive data (PII) in S3</td></tr>
+</table>
+<p>Also know: <b>AWS Artifact</b> (download compliance reports like SOC and ISO), <b>Trusted Advisor</b> (best-practice checks across cost, security, limits), <b>Security Hub</b> (one dashboard of findings).</p>
+<div class="box exam"><b class="t">Exam tip</b>Confusing pair: <b>CloudTrail = "who made this API call?"</b>, <b>CloudWatch = "how is my system performing?"</b>, <b>Config = "how did this resource's settings change?"</b>.</div>
+
+<h2>3. Encryption in 3 sentences</h2>
+<p><b>At rest</b> = data stored on disk is scrambled (S3, EBS, RDS support this with one tick, using KMS keys). <b>In transit</b> = data moving over the network is scrambled (HTTPS/TLS). <b>Envelope encryption</b> = a master key in KMS protects small data keys, and data keys protect your data, so the master key never leaves KMS.</p>
+<figure>
+<svg viewBox="0 0 700 190" role="img" aria-label="KMS key encrypting S3 object">
+<rect class="a" x="20" y="60" width="130" height="60" rx="8"/><text x="38" y="96" font-size="13" font-weight="700">Your file</text>
+<rect class="b" x="260" y="30" width="170" height="60" rx="8"/><text x="278" y="56" font-size="13" font-weight="700">KMS key</text><text x="278" y="76" font-size="12">never leaves KMS</text>
+<rect class="a" x="260" y="110" width="170" height="60" rx="8"/><text x="278" y="136" font-size="13" font-weight="700">S3 bucket</text><text x="278" y="156" font-size="12">stores ciphertext</text>
+<path class="l" d="M150 90 L260 130"/><path class="l" d="M345 90 L345 110"/>
+<text x="470" y="100" font-size="13">Only identities allowed by the</text><text x="470" y="120" font-size="13">key policy + IAM can decrypt.</text>
+</svg><figcaption>Even a stolen disk is useless without access to the key.</figcaption></figure>
+
+<h2>4. Lab: who deleted my file? (60 min)</h2>
+<ol class="steps">
+<li><b>CloudTrail → Event history</b> (free, last 90 days of management events). Filter <i>Event name = ConsoleLogin</i>. Find your own sign-in. Note source IP and whether MFA was used.</li>
+<li>Create an S3 bucket <code>day12-&lt;yourname&gt;-&lt;random&gt;</code> with <b>SSE-KMS</b> default encryption (choose the AWS managed key <code>aws/s3</code>; free).</li>
+<li>Upload a text file, then delete the bucket's file. In CloudTrail event history filter <i>Event source = s3.amazonaws.com</i> (data events are not logged by default; bucket-level calls like <code>CreateBucket</code> are). Wait up to 15 minutes if events don't show.</li>
+<li><b>KMS → AWS managed keys</b>: open <code>aws/s3</code> and read its key policy. Who can use it?</li>
+<li><b>Trusted Advisor</b> / <b>Security Hub</b> overview: skim what it flags on your account (MFA on root? public buckets?).</li>
+<li><b>Artifact</b>: open it and find the SOC 2 or ISO 27001 report list (you don't need to download).</li>
+<li>Optional: <b>GuardDuty</b> has a 30-day trial; enable only if you will check it and disable after.</li>
+<li><b>Cleanup</b>: delete the bucket. CloudTrail event history costs nothing; don't create extra trails that write to S3 unless you plan to delete them.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day12-cloudtrail-login.png</code> (blur IP and account ID)</div>
+
+<h2>5. Quiz: match the service</h2>
+<details><summary>1. Your site is hit by a flood of fake traffic.</summary>AWS Shield (Standard is automatic and free) plus CloudFront/WAF rate limiting.</details>
+<details><summary>2. Block SQL-injection attempts on a web app.</summary>AWS WAF.</details>
+<details><summary>3. Who terminated that EC2 instance last night?</summary>CloudTrail.</details>
+<details><summary>4. Find credit-card numbers accidentally stored in S3.</summary>Amazon Macie.</details>
+<details><summary>5. Detect a compromised instance mining crypto.</summary>Amazon GuardDuty.</details>
+<details><summary>6. Rotate a database password automatically.</summary>AWS Secrets Manager.</details>
+<details><summary>7. An auditor wants AWS's ISO certificates.</summary>AWS Artifact.</details>
+<details><summary>8. Is HTTPS encryption "at rest" or "in transit"?</summary>In transit.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Found my own ConsoleLogin in CloudTrail</label></li>
+<li><label><input type="checkbox" data-id="b"> Can match 8 of 8 quiz scenarios from memory</label></li>
+<li><label><input type="checkbox" data-id="c"> Bucket deleted, no stray trails or GuardDuty left on</label></li>
+</ul>

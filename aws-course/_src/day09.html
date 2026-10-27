@@ -1,0 +1,59 @@
+<!--meta {"n":9,"title":"Build a VPC from Scratch","time":"2h","week":2,"tag":"Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Create a custom VPC with a public and a private subnet, make the public one reachable from the internet, and prove it by serving a web page from an EC2 instance inside it.</div>
+
+<h2>1. The plan</h2>
+<p>Today is almost all hands-on. You will build exactly what Day 8's diagram showed. Cost: <b>zero</b> (no NAT gateway today; a t3.micro/t2.micro instance is covered by free-tier credits, but read your current plan at <code>aws.amazon.com/free</code>).</p>
+<div class="box analogy"><b class="t">Analogy: construction order</b>You buy the plot (VPC), divide it into rooms (subnets), build the front door (IGW), then put up the corridor signs (routes). Nobody can walk in until the signs point to the door.</div>
+
+<h2>2. Lab: the console way</h2>
+<ol class="steps">
+<li><b>VPC → Create VPC → VPC only.</b> Name <code>lab-vpc</code>, IPv4 CIDR <code>10.0.0.0/16</code>. Create.</li>
+<li><b>Subnets → Create subnet</b> in <code>lab-vpc</code>: <code>public-a</code> (<code>10.0.1.0/24</code>, AZ a) and <code>private-a</code> (<code>10.0.2.0/24</code>, AZ a). Create both.</li>
+<li>Select <code>public-a</code> → Actions → <b>Edit subnet settings</b> → enable <i>auto-assign public IPv4</i>.</li>
+<li><b>Internet gateways → Create</b> <code>lab-igw</code> → Actions → <b>Attach to VPC</b> → <code>lab-vpc</code>.</li>
+<li><b>Route tables → Create</b> <code>public-rt</code> in <code>lab-vpc</code>. Add route <code>0.0.0.0/0</code> → <code>lab-igw</code>. Under <b>Subnet associations</b> attach <code>public-a</code>. Leave <code>private-a</code> on the main route table (local only).</li>
+<li><b>EC2 → Launch instance</b>: Amazon Linux, t3.micro (or free-tier eligible). Network settings → Edit: VPC <code>lab-vpc</code>, subnet <code>public-a</code>, auto-assign public IP enabled, new security group allowing <b>HTTP (80)</b> from anywhere and <b>SSH (22) from My IP</b>.</li>
+<li>Under <i>Advanced → User data</i> paste:
+<pre><code>#!/bin/bash
+dnf install -y nginx
+echo "&lt;h1&gt;Hello from my own VPC&lt;/h1&gt;" &gt; /usr/share/nginx/html/index.html
+systemctl enable --now nginx</code></pre></li>
+<li>When the instance is running, open <code>http://&lt;public-ip&gt;</code> in your browser. 🎉</li>
+<li><b>Break it on purpose</b> (this is how you learn): remove the <code>0.0.0.0/0 → IGW</code> route. Refresh the page. It hangs. Add it back. It works. You now understand routing better than most beginners.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day09-vpc-map.png</code> (VPC → your VPC → Resource map tab) and <code>evidence/day09-hello.png</code></div>
+
+<h2>3. Same thing in the CLI (read, don't memorise)</h2>
+<pre><code>VPC=$(aws ec2 create-vpc --cidr-block 10.0.0.0/16 --query Vpc.VpcId --output text)
+SUB=$(aws ec2 create-subnet --vpc-id $VPC --cidr-block 10.0.1.0/24 --query Subnet.SubnetId --output text)
+IGW=$(aws ec2 create-internet-gateway --query InternetGateway.InternetGatewayId --output text)
+aws ec2 attach-internet-gateway --internet-gateway-id $IGW --vpc-id $VPC
+RT=$(aws ec2 create-route-table --vpc-id $VPC --query RouteTable.RouteTableId --output text)
+aws ec2 create-route --route-table-id $RT --destination-cidr-block 0.0.0.0/0 --gateway-id $IGW
+aws ec2 associate-route-table --route-table-id $RT --subnet-id $SUB</code></pre>
+<p>Every console click is just an API call. Tomorrow's lesson about automation (Infrastructure as Code) starts from this idea.</p>
+
+<h2>4. Troubleshooting ladder (use this for life)</h2>
+<table>
+<tr><th>Symptom</th><th>Check, in order</th></tr>
+<tr><td>Page times out</td><td>1) Public IP present? 2) Subnet route to IGW? 3) IGW attached? 4) Security group allows port 80? 5) Network ACL allows it? 6) Is nginx actually running?</td></tr>
+<tr><td>SSH refused/timeout</td><td>Security group source = your <i>current</i> IP? Key file permissions <code>chmod 400</code>?</td></tr>
+<tr><td>Page loads from instance but not browser</td><td>Almost always a route or security group problem, not the app.</td></tr>
+</table>
+
+<h2>5. Cleanup</h2>
+<p>Terminate the instance. Then delete in this order (dependencies!): route table <code>public-rt</code> (disassociate first), detach and delete the IGW, delete subnets, delete the VPC. Or: delete the VPC and the console offers to remove attached pieces. <b>Keep your notes</b>; tomorrow you rebuild faster.</p>
+
+<h2>6. Quiz</h2>
+<details><summary>1. You attached an IGW but the instance is unreachable. Name two other things to check.</summary>Route table entry to the IGW, public IP on the instance, security group rule.</details>
+<details><summary>2. What is the "local" route?</summary>An automatic route that lets all subnets in the VPC talk to each other. It cannot be deleted.</details>
+<details><summary>3. Why delete the instance before the VPC?</summary>Network interfaces from instances are still using the subnet; AWS blocks deletion of in-use dependencies.</details>
+<details><summary>4. Does an IGW cost money?</summary>No, the gateway itself is free (public IPv4 addresses are charged hourly).</details>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Web page served from my own VPC</label></li>
+<li><label><input type="checkbox" data-id="b"> Broke and fixed the route on purpose</label></li>
+<li><label><input type="checkbox" data-id="c"> Everything deleted, no running resources</label></li>
+</ul>

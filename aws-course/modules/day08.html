@@ -1,0 +1,89 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 8 - VPC: Your Private Network in the Cloud</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day8">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 8</span><span class="badge">Concepts · Lab</span><span class="badge">⏱ 1.5h</span></p><h1>VPC: Your Private Network in the Cloud</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain what a VPC, subnet, route table and internet gateway are, read a CIDR block like <code>10.0.0.0/16</code>, and say exactly why a subnet is "public" or "private".</div>
+
+<h2>1. First principles: why do we need a private network?</h2>
+<p>When you launched EC2 on Day 5, it sat in a network you never built. That was the <b>default VPC</b>. Every real company wants control over: <i>who can reach what</i>, <i>which machines are hidden from the internet</i>, and <i>which IP addresses are used</i>. A <b>VPC (Virtual Private Cloud)</b> is your own isolated slice of the AWS network where you decide all of that.</p>
+<div class="box analogy"><b class="t">Analogy: an office building</b>
+The <b>VPC</b> is the building you rent. <b>Subnets</b> are floors (each floor sits in one AZ). <b>Route tables</b> are the signs in the corridors telling people where to go. The <b>internet gateway</b> is the front door to the street. A floor with a path to the front door is <i>public</i>; a floor without one is <i>private</i> (the server room).</div>
+
+<h2>2. The five building blocks</h2>
+<table>
+<tr><th>Piece</th><th>What it is</th><th>Key fact</th></tr>
+<tr><td><b>VPC</b></td><td>Your network, one per Region, defined by an IP range</td><td>Spans all AZs in the Region</td></tr>
+<tr><td><b>Subnet</b></td><td>A slice of the VPC's IP range</td><td>Lives in exactly <b>one AZ</b></td></tr>
+<tr><td><b>Route table</b></td><td>Rules: "traffic for X goes to Y"</td><td>Each subnet is associated with one</td></tr>
+<tr><td><b>Internet Gateway (IGW)</b></td><td>Door between VPC and internet</td><td>Horizontally scaled, free, one per VPC</td></tr>
+<tr><td><b>Security group / NACL</b></td><td>Firewalls (Day 10)</td><td>Control what traffic is allowed</td></tr>
+</table>
+
+<h2>3. CIDR in 5 minutes (the only maths you need)</h2>
+<p>An IPv4 address is 32 bits, written as four numbers like <code>10.0.1.25</code>. A <b>CIDR block</b> such as <code>10.0.0.0/16</code> means: "the first 16 bits are fixed (the network), the remaining bits are free (the hosts)".</p>
+<div class="box analogy"><b class="t">Analogy: postal codes</b>The fixed part is the postal code of the town; the free part is the house number. A smaller number after the slash means a <i>bigger</i> town (more free bits).</div>
+<table>
+<tr><th>CIDR</th><th>Free bits</th><th>Total IPs</th><th>Typical use</th></tr>
+<tr><td><code>/16</code></td><td>16</td><td>65,536</td><td>Whole VPC (largest allowed)</td></tr>
+<tr><td><code>/20</code></td><td>12</td><td>4,096</td><td>Big subnet</td></tr>
+<tr><td><code>/24</code></td><td>8</td><td>256</td><td>Normal subnet</td></tr>
+<tr><td><code>/28</code></td><td>4</td><td>16</td><td>Smallest allowed subnet</td></tr>
+</table>
+<p>Formula: <code>IPs = 2^(32 − prefix)</code>. <b>AWS reserves 5 IPs in every subnet</b> (network, VPC router, DNS, future use, broadcast), so a /24 gives you <b>251</b> usable addresses. This is a classic exam question.</p>
+<div class="box exam"><b class="t">Exam tip</b>Use private ranges for VPCs: <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>. Allowed VPC size: /16 to /28. Subnets cannot overlap.</div>
+
+<h2>4. What makes a subnet public?</h2>
+<p>Not a checkbox. A subnet is <b>public</b> only if <b>all three</b> are true:</p>
+<ol>
+<li>The VPC has an <b>internet gateway</b> attached.</li>
+<li>The subnet's route table has a route <code>0.0.0.0/0 → igw-xxxx</code> ("everything not local goes out the front door").</li>
+<li>The instance has a <b>public IP</b> (auto-assigned or Elastic IP) and its security group allows the traffic.</li>
+</ol>
+<figure>
+<svg viewBox="0 0 700 300" role="img" aria-label="VPC with public and private subnet, route tables and internet gateway">
+<rect class="c" x="20" y="20" width="520" height="260" rx="12"/><text x="36" y="46" font-weight="700">VPC 10.0.0.0/16</text>
+<rect class="a" x="40" y="66" width="220" height="190" rx="8"/><text x="54" y="90" font-size="14" font-weight="700">Public subnet 10.0.1.0/24 (AZ a)</text>
+<rect class="b" x="60" y="104" width="180" height="34" rx="4"/><text x="74" y="126" font-size="13">Web server (public IP)</text>
+<text x="54" y="168" font-size="12" class="m">Route table:</text><text x="54" y="186" font-size="12">10.0.0.0/16 → local</text><text x="54" y="204" font-size="12" font-weight="700">0.0.0.0/0 → IGW</text>
+<rect class="b" x="300" y="66" width="220" height="190" rx="8"/><text x="314" y="90" font-size="14" font-weight="700">Private subnet 10.0.2.0/24 (AZ a)</text>
+<rect class="b" x="320" y="104" width="180" height="34" rx="4"/><text x="334" y="126" font-size="13">Database (private IP only)</text>
+<text x="314" y="168" font-size="12" class="m">Route table:</text><text x="314" y="186" font-size="12">10.0.0.0/16 → local</text><text x="314" y="204" font-size="12" class="m">(no route to internet)</text>
+<rect class="a" x="590" y="120" width="90" height="60" rx="8"/><text x="604" y="146" font-size="13" font-weight="700">Internet</text><text x="604" y="164" font-size="13">Gateway</text>
+<path class="l" d="M260 121 L590 140"/><path class="l" d="M260 130 L300 130" stroke-dasharray="4 4"/>
+</svg><figcaption>Same VPC, two floors. Only the one with a route to the IGW is public. Traffic between subnets uses the automatic "local" route.</figcaption></figure>
+
+<h2>5. Lab: explore the default VPC, then plan your own</h2>
+<ol class="steps">
+<li>Console → <b>VPC → Your VPCs</b>. Note the default VPC (CIDR <code>172.31.0.0/16</code>).</li>
+<li>Open <b>Subnets</b>: how many? Which AZ does each sit in? Check the <i>Auto-assign public IPv4</i> column.</li>
+<li>Open <b>Route tables</b> → select the main one → <b>Routes</b> tab. Find the <code>0.0.0.0/0</code> route. What is the target?</li>
+<li>Open <b>Internet gateways</b>: confirm one is attached to the default VPC.</li>
+<li>Now in the CLI:
+<pre><code>aws ec2 describe-vpcs --query "Vpcs[].[VpcId,CidrBlock,IsDefault]" --output table
+aws ec2 describe-subnets --query "Subnets[].[SubnetId,AvailabilityZone,CidrBlock]" --output table</code></pre></li>
+<li><b>Paper exercise (tomorrow's blueprint):</b> design <code>10.0.0.0/16</code> with 2 public and 2 private /24 subnets across 2 AZs. Write the 4 CIDRs: <code>10.0.1.0/24</code>, <code>10.0.2.0/24</code>, <code>10.0.11.0/24</code>, <code>10.0.12.0/24</code> (or choose your own).</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day08-default-vpc.png</code> (route table showing the IGW route)</div>
+
+<h2>6. Quiz</h2>
+<details><summary>1. How many usable IPs in a /24 subnet in AWS?</summary>251 (256 minus 5 reserved).</details>
+<details><summary>2. Can one subnet span two AZs?</summary>No. A subnet lives in exactly one AZ; a VPC spans the whole Region.</details>
+<details><summary>3. What route makes a subnet public?</summary><code>0.0.0.0/0</code> pointing to an internet gateway.</details>
+<details><summary>4. Smallest and largest VPC CIDR allowed?</summary>/28 and /16.</details>
+<details><summary>5. A server in a private subnet has no public IP. What does its route table need to still reach the internet for updates?</summary>A route to a NAT gateway (Day 10).</details>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Located the IGW route in the default VPC</label></li>
+<li><label><input type="checkbox" data-id="b"> Can compute IPs from a CIDR prefix</label></li>
+<li><label><input type="checkbox" data-id="c"> Drew my 4-subnet design on paper</label></li>
+</ul>
+<nav class="pn"><a href="day07.html">← Day 7: EBS, Pricing Models and Week 1 Review</a><a href="day09.html">Day 9: Build a VPC from Scratch →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>
