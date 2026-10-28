@@ -1,0 +1,80 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 14 - Week 2 Review: Design a Secure Two-Tier Network</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day14">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 14</span><span class="badge">Review · Mini-project</span><span class="badge">⏱ 2–4h</span></p><h1>Week 2 Review: Design a Secure Two-Tier Network</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Combine VPC, subnets, security groups, CloudFront and monitoring into one architecture diagram, justify every choice, and score ≥ 8/10 on a mixed exam-style quiz.</div>
+
+<h2>1. Mini-project: "ShopFast" network design</h2>
+<p>A client wants a small online shop. Requirements: public website, database nobody on the internet can reach, HTTPS, fast for users in Africa and Europe, alerts if the server struggles, and an audit trail. <b>Design it on paper first</b>, then build the core in AWS.</p>
+<figure>
+<svg viewBox="0 0 700 290" role="img" aria-label="ShopFast reference architecture">
+<g font-size="13">
+<text x="14" y="150" font-size="26">👥</text>
+<rect class="a" x="70" y="120" width="110" height="60" rx="8"/><text x="82" y="146">Route 53</text><text x="82" y="164" font-size="11" class="m">shop.example.com</text>
+<rect class="a" x="70" y="195" width="110" height="50" rx="8"/><text x="82" y="217">CloudFront</text><text x="82" y="233" font-size="11" class="m">HTTPS · ACM</text>
+<rect class="c" x="230" y="10" width="450" height="270" rx="12"/><text x="246" y="34" font-weight="700">VPC 10.0.0.0/16</text>
+<rect class="b" x="250" y="50" width="200" height="110" rx="8"/><text x="264" y="72" font-size="13">Public subnet 10.0.1.0/24</text><text x="264" y="90" font-size="11" class="m">route → IGW</text><rect class="a" x="268" y="105" width="160" height="40" rx="6"/><text x="280" y="130">Web EC2 (SG: 80, 443)</text>
+<rect class="b" x="470" y="50" width="190" height="110" rx="8"/><text x="484" y="72" font-size="13">Private subnet 10.0.2.0/24</text><text x="484" y="90" font-size="11" class="m">no IGW route</text><rect class="a" x="488" y="105" width="150" height="40" rx="6"/><text x="500" y="130">DB (SG: 3306 from web SG)</text>
+<rect class="b" x="250" y="180" width="410" height="80" rx="8"/><text x="264" y="204" font-size="13">Always on: CloudTrail · CloudWatch alarm (CPU) · KMS-encrypted storage · IAM roles</text><text x="264" y="228" font-size="11" class="m">no keys in code · MFA on root · budget alert</text>
+</g>
+<line x1="125" y1="195" x2="125" y2="180" stroke="#888" stroke-width="2"/><line x1="180" y1="225" x2="250" y2="125" stroke="#888" stroke-width="2"/><line x1="450" y1="125" x2="488" y2="125" stroke="#888" stroke-width="2"/>
+</svg><figcaption>Your reference design for the week. Later weeks add load balancing, Auto Scaling and a managed database.</figcaption></figure>
+
+<h3>Build (1.5–2 h)</h3>
+<div class="box warn"><b class="t">Cost safety</b>No NAT gateway, no RDS yet. Use two t3.micro EC2 instances (a stand-in "DB" is fine: just run <code>python3 -m http.server 3306</code> or install MariaDB) and delete everything afterwards.</div>
+<ol class="steps">
+<li>Build the VPC, a public and a private subnet, IGW, and two route tables (quick now, you did it on Day 8-9).</li>
+<li>Web instance in public subnet with nginx, security group ports 80 (anywhere) and SSH (my IP only).</li>
+<li>"DB" instance in the private subnet. Security group inbound 3306 <b>only from the web SG</b>.</li>
+<li>From the web instance prove reachability: <code>nc -zv PRIVATE_IP 3306</code> succeeds. From your laptop it can't even be attempted (no public IP).</li>
+<li>Put CloudFront in front of the web instance (origin = its public DNS name, HTTP only to origin for this lab). Test <code>x-cache</code> headers.</li>
+<li>Add the CPU alarm from Day 13.</li>
+<li>Export your diagram (draw.io, or hand-draw and photo) to <code>evidence/day14-architecture.png</code>.</li>
+<li><b>Cleanup everything.</b> Verify Billing → Bills shows nothing running.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day14-architecture.png</code>, <code>evidence/day14-nc-success.png</code>, <code>evidence/day14-sg-rules.png</code></div>
+
+<h2>2. Week 2 mixed quiz (15 min, no notes)</h2>
+<details><summary>1. How many IPs does AWS reserve in each subnet?</summary>5.</details>
+<details><summary>2. A DB subnet must not be reachable from the internet. What's different about its route table?</summary>No route to an internet gateway.</details>
+<details><summary>3. Private instances need outbound internet only. Which service?</summary>NAT gateway (in a public subnet).</details>
+<details><summary>4. SG or NACL: allow rules only and stateful?</summary>Security group.</details>
+<details><summary>5. Which Route 53 policy sends a % of traffic to each endpoint?</summary>Weighted.</details>
+<details><summary>6. Apex domain pointing to CloudFront?</summary>Alias record.</details>
+<details><summary>7. How do you let only CloudFront read a private bucket?</summary>OAC + bucket policy.</details>
+<details><summary>8. Which service tells you who deleted a resource?</summary>CloudTrail.</details>
+<details><summary>9. Which finds PII in S3?</summary>Macie.</details>
+<details><summary>10. Where is a user's database password best stored?</summary>Secrets Manager (retrieved with an IAM role).</details>
+<details><summary>11. A VPC endpoint to S3 that is free?</summary>Gateway endpoint.</details>
+<details><summary>12. Shield Standard cost?</summary>Free, always on.</details>
+
+<h2>3. Weekend wrap-up: commit your progress</h2>
+<pre><code>cd ~/aws_cloud_engineer_journey
+git checkout -b week-2-notes
+# add notes/day13-scenarios.md, evidence screenshots (blur account IDs, no keys!)
+git add aws-course
+git diff --staged | grep -i -E "AKIA|secret|BEGIN RSA" &amp;&amp; echo "STOP: secrets found!"
+git commit -m "Week 2 complete: VPC, Route 53, CloudFront, KMS, CloudTrail"
+git push -u origin week-2-notes</code></pre>
+<p>Tick Days 8–14 in the README progress table, then write your 5-sentence reflection.</p>
+
+<h2>4. Looking ahead: Week 3 and 4 (Cloud Practitioner finish line)</h2>
+<p>Week 3 fills the remaining CLF-C02 domains: databases (RDS, DynamoDB), serverless (Lambda), messaging, the Shared Responsibility Model deep dive, the Well-Architected Framework and the pricing/support/Organizations material. Week 4 is exam prep: practice papers, weak-spot drills and <b>sitting the exam</b>. Book your date now so the deadline is real.</p>
+
+<h2>5. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Drew the ShopFast architecture without looking</label></li>
+<li><label><input type="checkbox" data-id="b"> DB reachable only from the web tier</label></li>
+<li><label><input type="checkbox" data-id="c"> Quiz ≥ 10/12</label></li>
+<li><label><input type="checkbox" data-id="d"> Everything deleted, pushed to GitHub</label></li>
+<li><label><input type="checkbox" data-id="e"> Booked the CLF-C02 exam (Pearson VUE or test centre)</label></li>
+</ul>
+<nav class="pn"><a href="day13.html">← Day 13: Who Did What? CloudTrail, CloudWatch and Threat Defence (Weekend Lab)</a><a href="../index.html">Course home →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

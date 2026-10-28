@@ -1,0 +1,86 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 10 - DNS and Route 53</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day10">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 10</span><span class="badge">Concepts · Lab</span><span class="badge">⏱ 1.5h</span></p><h1>DNS and Route 53</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Trace what happens when you type a web address, read DNS records, and choose the right Route 53 routing policy.</div>
+
+<h2>1. First principles: computers need numbers, humans want names</h2>
+<p>Networks route by IP address (<code>203.0.113.10</code>). People remember names (<code>example.com</code>). <b>DNS (Domain Name System)</b> is the phone book that turns one into the other. <b>Route 53</b> is AWS's DNS service (53 = the DNS port).</p>
+<div class="box analogy"><b class="t">Analogy: asking for directions</b>You ask a local (your resolver) for "Mama's Pizza". They don't know, so they ask the city directory (root servers) → the ".com" district office (TLD servers) → Mama's own receptionist (authoritative server, where Route 53 lives) who gives the street address. Your local remembers it for a while (<b>TTL</b> = cache time).</div>
+<figure>
+<svg viewBox="0 0 700 170" role="img" aria-label="DNS lookup chain">
+<g font-size="13">
+<rect class="b" x="10" y="60" width="100" height="50" rx="8"/><text x="28" y="90">Browser</text>
+<rect class="a" x="150" y="60" width="110" height="50" rx="8"/><text x="164" y="82">Resolver</text><text x="164" y="98" font-size="11" class="m">(ISP / 8.8.8.8)</text>
+<rect class="b" x="300" y="10" width="110" height="40" rx="8"/><text x="326" y="35">Root</text>
+<rect class="b" x="300" y="65" width="110" height="40" rx="8"/><text x="326" y="90">.com TLD</text>
+<rect class="c" x="300" y="120" width="130" height="40" rx="8"/><text x="312" y="145">Route 53 (auth.)</text>
+</g>
+<line x1="110" y1="85" x2="150" y2="85" stroke="#888" stroke-width="2"/><line x1="260" y1="75" x2="300" y2="32" stroke="#888" stroke-width="2"/><line x1="260" y1="85" x2="300" y2="85" stroke="#888" stroke-width="2"/><line x1="260" y1="95" x2="300" y2="140" stroke="#888" stroke-width="2"/>
+<text x="470" y="90" font-size="13">→ answer: 203.0.113.10 (cached for TTL)</text>
+</svg><figcaption>Four hops the first time; cached afterwards.</figcaption></figure>
+
+<h2>2. Records you must know</h2>
+<table><tr><th>Type</th><th>Maps</th><th>Example</th></tr>
+<tr><td>A</td><td>name → IPv4</td><td><code>app.example.com → 203.0.113.10</code></td></tr>
+<tr><td>AAAA</td><td>name → IPv6</td><td></td></tr>
+<tr><td>CNAME</td><td>name → another name</td><td><code>www → app.example.com</code> (not allowed at the root/apex)</td></tr>
+<tr><td>Alias (AWS-only)</td><td>name → AWS resource (ALB, CloudFront, S3 site)</td><td>Works at the apex, <b>free queries</b>, health-aware</td></tr>
+<tr><td>MX / TXT / NS</td><td>mail / verification text / name servers</td><td></td></tr></table>
+
+<h2>3. Routing policies (exam favourite)</h2>
+<table><tr><th>Policy</th><th>Use it when…</th></tr>
+<tr><td>Simple</td><td>One resource, no logic</td></tr>
+<tr><td>Weighted</td><td>Send 10% to a new version (canary), 90% to old</td></tr>
+<tr><td>Latency</td><td>Send users to the Region with the lowest latency</td></tr>
+<tr><td>Failover</td><td>Primary/standby, switch when health check fails</td></tr>
+<tr><td>Geolocation</td><td>By user's country (laws, language)</td></tr>
+<tr><td>Geoproximity</td><td>By distance, with adjustable bias</td></tr>
+<tr><td>Multivalue</td><td>Return up to 8 healthy IPs (poor man's load balancer)</td></tr></table>
+
+<h2>4. Lab: explore DNS, then (optionally) host your own</h2>
+<ol class="steps">
+<li>In CloudShell or your Linux terminal:
+<pre><code>dig example.com                  # the answer + TTL
+dig +trace example.com           # watch root → TLD → authoritative
+dig example.com NS               # who is authoritative
+dig MX gmail.com +short
+nslookup aws.amazon.com</code></pre>
+Write down: what is the TTL? Which name servers answered?</li>
+<li>Run <code>dig +short YOUR-EC2-PUBLIC-DNS-NAME</code> for any instance you launch (or use a public AWS name such as <code>s3.eu-west-1.amazonaws.com</code>). Notice AWS already runs DNS for you.</li>
+<li><b>Optional, if you own a domain</b> (or buy a cheap one; Route 53 domains start around USD 12/year): Route 53 → <b>Hosted zones → Create</b> (public, USD 0.50/month). Copy the 4 NS values to your registrar. Add an <b>A record</b> <code>lab.yourdomain.com</code> pointing to an EC2 public IP serving your nginx page. Wait for propagation, then browse to it.</li>
+<li>Add a <b>weighted pair</b> (two A records, weights 90/10, different IPs). Run <code>dig lab.yourdomain.com</code> ten times and count the answers.</li>
+<li><b>Cleanup:</b> delete the records and the hosted zone (otherwise USD 0.50/month continues). Terminate the instance.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day10-dig-trace.txt</code> (paste the terminal output; no secrets in it) and, if done, a Route 53 records screenshot</div>
+
+<h2>5. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Route 53 = DNS + domain registration + health checks.</li>
+<li>Alias vs CNAME: alias for AWS targets and apex domains, free of charge.</li>
+<li>Low TTL = changes spread fast but more queries. High TTL = cached longer.</li>
+<li>DNS only answers "where is it?". It does not carry your traffic or cache your content.</li></ul></div>
+
+<h2>6. Quiz</h2>
+<details><summary>Q1. Point example.com (apex) at a load balancer. Which record?</summary>Alias A record.</details>
+<details><summary>Q2. Roll out a new version to 5% of users?</summary>Weighted routing.</details>
+<details><summary>Q3. Users in Germany must see the EU site only?</summary>Geolocation routing.</details>
+<details><summary>Q4. Automatic switch to a standby site when primary is down?</summary>Failover routing with a health check.</details>
+<details><summary>Q5. What does TTL control?</summary>How long resolvers cache a record.</details>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Ran dig +trace and can narrate the 4 hops</label></li>
+<li><label><input type="checkbox" data-id="b"> Know A, CNAME, Alias differences</label></li>
+<li><label><input type="checkbox" data-id="c"> Can name 5 routing policies and a use for each</label></li>
+<li><label><input type="checkbox" data-id="d"> Deleted any hosted zone I created</label></li>
+</ul>
+<nav class="pn"><a href="day09.html">← Day 9: Private Subnets, NAT and Network Security</a><a href="day11.html">Day 11: CloudFront: Fast and Secure Delivery →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

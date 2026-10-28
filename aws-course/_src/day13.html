@@ -1,0 +1,86 @@
+<!--meta {"n":13,"title":"Who Did What? CloudTrail, CloudWatch and Threat Defence (Weekend Lab)","time":"3–4h","week":2,"tag":"Security · Weekend lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Investigate "who did this?" with CloudTrail, watch a server with CloudWatch metrics and alarms, and map every security service the Cloud Practitioner exam asks about to the problem it solves.</div>
+
+<h2>1. First principles: you can't protect what you can't see</h2>
+<p>Security is prevention, <b>detection</b> and response. Day 3 to 12 were prevention. Today is detection. Three different questions, three different services:</p>
+<table><tr><th>Question</th><th>Service</th><th>Analogy</th></tr>
+<tr><td><b>Who</b> did what, when, from where?</td><td><b>CloudTrail</b></td><td>The building's visitor logbook and CCTV</td></tr>
+<tr><td><b>How is it performing</b> right now?</td><td><b>CloudWatch</b> (metrics, logs, alarms)</td><td>Dashboard lights and smoke alarm</td></tr>
+<tr><td><b>Is it configured</b> the way the rules say?</td><td><b>AWS Config</b></td><td>The inspector's compliance checklist</td></tr></table>
+<figure>
+<svg viewBox="0 0 700 150" role="img" aria-label="Three observability services">
+<g font-size="13">
+<rect class="a" x="10" y="30" width="200" height="90" rx="10"/><text x="30" y="60" font-weight="700">CloudTrail</text><text x="30" y="82" font-size="12">API calls: who, what, when</text><text x="30" y="100" font-size="11" class="m">90 days free in Event history</text>
+<rect class="b" x="250" y="30" width="200" height="90" rx="10"/><text x="270" y="60" font-weight="700">CloudWatch</text><text x="270" y="82" font-size="12">metrics · logs · alarms</text><text x="270" y="100" font-size="11" class="m">CPU, errors, custom data</text>
+<rect class="c" x="490" y="30" width="200" height="90" rx="10"/><text x="510" y="60" font-weight="700">AWS Config</text><text x="510" y="82" font-size="12">resource config history</text><text x="510" y="100" font-size="11" class="m">rules: "is S3 encrypted?"</text>
+</g></svg><figcaption>Audit (Trail), Performance (Watch), Compliance (Config).</figcaption></figure>
+
+<h2>2. The threat-defence cast (learn as a matching game)</h2>
+<table><tr><th>Service</th><th>One-line job</th><th>Think of it as</th></tr>
+<tr><td>Shield Standard / Advanced</td><td>DDoS protection (Standard free, automatic)</td><td>Crowd barriers at the stadium</td></tr>
+<tr><td>WAF</td><td>Layer-7 firewall for web requests (SQL injection, bad bots, rate limits). Attaches to CloudFront/ALB/API Gateway</td><td>Bag check at the door</td></tr>
+<tr><td>GuardDuty</td><td>Threat detection: analyses logs for suspicious behaviour</td><td>A detective reading CCTV</td></tr>
+<tr><td>Inspector</td><td>Scans EC2/containers/Lambda for vulnerabilities</td><td>Building safety inspector</td></tr>
+<tr><td>Macie</td><td>Finds sensitive data (PII) in S3</td><td>Sniffer dog for personal data</td></tr>
+<tr><td>Security Hub</td><td>One dashboard collecting findings from all of the above</td><td>Security control room</td></tr>
+<tr><td>Artifact</td><td>Download AWS compliance reports (SOC, ISO)</td><td>The auditor's paperwork library</td></tr>
+<tr><td>Organizations / SCPs</td><td>Manage many accounts; guardrail policies that cap what accounts can do</td><td>Head office rules for all branches</td></tr>
+<tr><td>Trusted Advisor</td><td>Checks for cost, security, limits, performance tips</td><td>Free consultant</td></tr></table>
+
+<h2>3. Lab part A: investigate yourself with CloudTrail (45 min)</h2>
+<ol class="steps">
+<li>CloudTrail → <b>Event history</b>. Filter <i>Event name</i> = <code>ConsoleLogin</code>. Open your login event. Note the source IP, user agent and whether MFA was used.</li>
+<li>Do an action: create then delete an S3 bucket. Wait ~5 minutes, filter <i>Event name</i> = <code>CreateBucket</code> and <code>DeleteBucket</code>. Find your event JSON.</li>
+<li>Also in the CLI: <pre><code>aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=CreateBucket --max-results 3</code></pre></li>
+<li>Go back to Day 12: find the <code>AccessDenied</code> / <code>Decrypt</code> events (KMS) that your test user caused.</li>
+<li>Create a <b>trail</b> to keep history beyond 90 days: CloudTrail → Create trail → all Regions → new S3 bucket. (First trail's management events are free, S3 storage costs pennies.)</li>
+</ol>
+
+<h2>4. Lab part B: alarm on a busy server (1 h)</h2>
+<div class="box warn"><b class="t">Cost safety</b>One t3.micro for under an hour. First 10 alarms are free. Terminate the instance at the end.</div>
+<ol class="steps">
+<li>Launch an Amazon Linux instance (Day 5 recipe) with <b>detailed monitoring off</b>. SSH in.</li>
+<li>CloudWatch → Alarms → <b>Create alarm</b> → Select metric → EC2 → Per-instance → <code>CPUUtilization</code> of your instance. Condition: <b>greater than 50</b> for 1 datapoint of 5 min. Notification: new SNS topic with your email; <b>confirm the subscription email</b>. Name <code>day13-cpu-high</code>.</li>
+<li>Burn CPU: <pre><code>sudo dnf install -y stress-ng
+stress-ng --cpu 2 --timeout 600s</code></pre></li>
+<li>Watch the metric graph climb. Within ~5–10 minutes the alarm turns <b>In alarm</b> and an email arrives. 📧</li>
+<li>Stop the stress (Ctrl+C) and see it return to <b>OK</b>.</li>
+<li>Open <b>Logs → Log groups</b> (empty is fine) and read about the CloudWatch agent: metrics like memory and disk need it, because AWS can't see inside your OS.</li>
+<li><b>Cleanup:</b> delete the alarm and the SNS topic; terminate the instance. Keep the trail (cheap) or delete it.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day13-cloudtrail-event.png</code>, <code>evidence/day13-alarm-in-alarm.png</code>, and the alarm email (blur your address)</div>
+
+<h2>5. Lab part C: thinking like an architect (30 min, no AWS needed)</h2>
+<p>Write answers in <code>notes/day13-scenarios.md</code>. For each, name the service(s) and why:</p>
+<ol>
+<li>"An admin deleted a production bucket. Who was it?"</li>
+<li>"Our website is hit by a wave of fake requests from thousands of IPs."</li>
+<li>"An EC2 instance is talking to a known crypto-mining address."</li>
+<li>"Are any of our S3 buckets holding customer ID numbers?"</li>
+<li>"Auditor wants SOC 2 evidence from AWS."</li>
+<li>"Alert me when someone makes a security group open to 0.0.0.0/0."</li></ol>
+<details><summary>Answers</summary>1 CloudTrail · 2 Shield + WAF (+CloudFront) · 3 GuardDuty · 4 Macie · 5 Artifact · 6 Config rule (or EventBridge on CloudTrail events).</details>
+
+<h2>6. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>CloudTrail = API activity (governance/audit). CloudWatch = performance/operations. Config = resource state and compliance.</li>
+<li>Default CloudWatch EC2 metrics don't include memory. Basic = 5 min; detailed = 1 min.</li>
+<li>Shield Standard is free for everyone; Advanced is a paid add-on with response team.</li>
+<li>WAF filters HTTP requests; security groups/NACLs filter ports and IPs.</li></ul></div>
+
+<h2>7. Quiz</h2>
+<details><summary>Q1. Which service records API calls made in your account?</summary>CloudTrail.</details>
+<details><summary>Q2. Block SQL injection attempts on a web app?</summary>AWS WAF.</details>
+<details><summary>Q3. Which service uses ML on logs to flag unusual behaviour?</summary>GuardDuty.</details>
+<details><summary>Q4. Alert when CPU is above 80%?</summary>CloudWatch alarm (with SNS).</details>
+<details><summary>Q5. Which is free and automatic for every customer?</summary>Shield Standard.</details>
+<details><summary>Q6. Which service enforces "no account may use Region X"?</summary>Organizations service control policy (SCP).</details>
+
+<h2>8. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Found my own login and CreateBucket events</label></li>
+<li><label><input type="checkbox" data-id="b"> Received an alarm email</label></li>
+<li><label><input type="checkbox" data-id="c"> Matched all six scenarios without peeking</label></li>
+<li><label><input type="checkbox" data-id="d"> Instance terminated, alarm and topic deleted</label></li>
+</ul>

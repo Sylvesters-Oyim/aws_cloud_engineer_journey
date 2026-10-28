@@ -1,0 +1,65 @@
+<!--meta {"n":11,"title":"CloudFront: Fast and Secure Delivery","time":"2h","week":2,"tag":"Concepts · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain what a CDN does, put CloudFront in front of a private S3 bucket, and serve your site over HTTPS from edge locations worldwide.</div>
+
+<h2>1. First principles: distance is delay</h2>
+<p>Data moves near the speed of light, but a round trip from Nairobi to Virginia still costs ~200 ms, and a page needs many round trips. If the content already sits near the user, the delay disappears. A <b>CDN (Content Delivery Network)</b> keeps copies of your content in many places. <b>CloudFront</b> is AWS's CDN with 400+ edge locations.</p>
+<div class="box analogy"><b class="t">Analogy: pizza scooters again</b>The origin (S3 or your server) is the central kitchen. Edge locations are scooters parked in every neighbourhood with popular pizzas. First customer in a street: the scooter fetches from the kitchen (<b>cache miss</b>). Everyone after: instant (<b>cache hit</b>). <b>TTL</b> = how long a pizza stays "fresh".</div>
+<figure>
+<svg viewBox="0 0 700 200" role="img" aria-label="CloudFront cache hit and miss">
+<g font-size="13">
+<text x="20" y="105" font-size="28">👤</text>
+<rect class="a" x="120" y="75" width="150" height="60" rx="10"/><text x="138" y="100">CloudFront edge</text><text x="138" y="120" font-size="11" class="m">cache + HTTPS + WAF</text>
+<rect class="b" x="400" y="20" width="160" height="50" rx="8"/><text x="420" y="50">S3 bucket (private)</text>
+<rect class="b" x="400" y="130" width="160" height="50" rx="8"/><text x="420" y="160">ALB / EC2 origin</text>
+</g>
+<line x1="60" y1="105" x2="120" y2="105" stroke="#888" stroke-width="2"/><line x1="270" y1="90" x2="400" y2="45" stroke="#888" stroke-width="2" stroke-dasharray="5 4"/><line x1="270" y1="120" x2="400" y2="155" stroke="#888" stroke-width="2" stroke-dasharray="5 4"/>
+<text x="580" y="45" font-size="11" class="m">only on cache miss</text>
+</svg><figcaption>Hits are answered at the edge. Misses go to the origin once, then are cached.</figcaption></figure>
+
+<h2>2. The vocabulary</h2>
+<table><tr><th>Term</th><th>Meaning</th></tr>
+<tr><td>Distribution</td><td>Your CloudFront setup; gets a domain like <code>d111abcd.cloudfront.net</code></td></tr>
+<tr><td>Origin</td><td>Where the original content lives: S3, ALB, EC2, any HTTP server</td></tr>
+<tr><td>Behavior</td><td>Rules per URL path (e.g. <code>/api/*</code> not cached)</td></tr>
+<tr><td>OAC (Origin Access Control)</td><td>Lets CloudFront read a <b>private</b> bucket, nobody else can</td></tr>
+<tr><td>Invalidation</td><td>Force edges to drop cached files (<code>/*</code>)</td></tr>
+<tr><td>ACM certificate</td><td>Free TLS certificate for HTTPS on your own domain (for CloudFront, create it in <b>us-east-1</b>)</td></tr></table>
+<p>Benefits: lower latency, offload the origin, built-in <b>DDoS protection (Shield Standard)</b>, HTTPS, and cheaper data transfer out than direct from S3.</p>
+
+<h2>3. Lab: HTTPS static site on a private bucket</h2>
+<div class="box warn"><b class="t">Cost safety</b>CloudFront has a generous monthly free allowance and S3 pennies for a tiny site. Still, <b>disable then delete</b> the distribution at the end (takes a few minutes to deploy and to disable).</div>
+<ol class="steps">
+<li>Create an S3 bucket <code>day11-site-YOURNAME-123</code>, <b>Block all public access ON</b> (as Day 6, the opposite of last time).</li>
+<li>Upload an <code>index.html</code> (reuse your nginx-lab page, add a funny line and an image).</li>
+<li>CloudFront → <b>Create distribution</b> → origin = your bucket (choose the S3 REST endpoint, not the website endpoint). Origin access: <b>Origin access control (OAC) → create new</b>. Default root object: <code>index.html</code>. WAF: skip (costs).</li>
+<li>After creating, CloudFront shows a banner: <b>Copy policy</b> → go to the bucket → Permissions → Bucket policy → paste → save. (This lets only this distribution read the bucket.)</li>
+<li>Wait until status says <b>Deployed</b> (~3–5 min). Open <code>https://dXXXX.cloudfront.net</code>. 🎉 HTTPS, no server, no public bucket.</li>
+<li>Prove the bucket is private: open the S3 object URL directly. You get <b>AccessDenied</b>.</li>
+<li>Test caching: <code>curl -sI https://dXXXX.cloudfront.net | grep -i x-cache</code>. First time <code>Miss from cloudfront</code>, second <code>Hit from cloudfront</code>.</li>
+<li>Edit your <code>index.html</code>, re-upload, reload: you may still see the old one (cached!). Create an <b>invalidation</b> for <code>/*</code> and it updates.</li>
+<li><b>Cleanup:</b> Disable the distribution → wait → Delete. Empty and delete the bucket.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day11-cloudfront-site.png</code> and <code>evidence/day11-x-cache.txt</code> (Miss then Hit)</div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>CloudFront caches at edge locations; Global Accelerator is different (routes TCP/UDP over AWS backbone to your endpoints, no caching).</li>
+<li>Private S3 + CloudFront = use OAC (the older name was OAI).</li>
+<li>Signed URLs/cookies restrict content to paying/authorised users.</li>
+<li>Geo-restriction can allow/block countries.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. Users worldwide complain a static site is slow. Fix?</summary>Put CloudFront in front of the origin.</details>
+<details><summary>Q2. Keep an S3 bucket private but let only CloudFront read it?</summary>Origin Access Control with a bucket policy.</details>
+<details><summary>Q3. You updated a file but users see the old one?</summary>It's cached; create an invalidation or version the file name.</details>
+<details><summary>Q4. Where is the certificate for CloudFront requested?</summary>ACM in us-east-1.</details>
+<details><summary>Q5. CloudFront vs S3 Transfer Acceleration?</summary>CloudFront caches downloads for many users; Transfer Acceleration speeds up uploads to S3 over edge locations.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Site live on HTTPS via CloudFront</label></li>
+<li><label><input type="checkbox" data-id="b"> Direct S3 URL denied</label></li>
+<li><label><input type="checkbox" data-id="c"> Saw Miss then Hit</label></li>
+<li><label><input type="checkbox" data-id="d"> Deleted distribution and bucket</label></li>
+</ul>

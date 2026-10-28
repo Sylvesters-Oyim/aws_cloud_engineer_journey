@@ -1,0 +1,67 @@
+<!--meta {"n":9,"title":"Private Subnets, NAT and Network Security","time":"2h","week":2,"tag":"Concepts · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Design a public/private two-tier network, explain NAT and VPC endpoints, and tell Security Groups from Network ACLs (a guaranteed exam topic).</div>
+
+<h2>1. First principles: not everything should face the internet</h2>
+<p>Your web server must be reachable. Your database must not. The safest door is the one that doesn't exist. So we split the VPC: <b>public subnets</b> for things that must be reached, <b>private subnets</b> (no route to the IGW) for everything else.</p>
+<p>But a private server still needs to <i>go out</i> (OS updates, calling APIs). That is what <b>NAT</b> is for.</p>
+<div class="box analogy"><b class="t">Analogy: a company switchboard</b>Staff (private servers) have no public phone numbers. When they call out, the switchboard (<b>NAT gateway</b>) places the call under the company's number and routes the reply back. Outsiders can't ring a staff member directly.</div>
+<figure>
+<svg viewBox="0 0 700 250" role="img" aria-label="Two tier network with NAT gateway">
+<text x="20" y="130" font-size="28">🌍</text><rect class="b" x="70" y="105" width="70" height="40" rx="6"/><text x="82" y="130" font-size="13">IGW</text>
+<rect class="c" x="160" y="10" width="520" height="230" rx="12"/><text x="176" y="34" font-weight="700">VPC 10.0.0.0/16</text>
+<rect class="a" x="180" y="50" width="200" height="175" rx="8"/><text x="194" y="74" font-size="14">Public subnet</text>
+<rect class="b" x="198" y="90" width="160" height="34" rx="6"/><text x="210" y="112" font-size="13">Web server</text>
+<rect class="b" x="198" y="140" width="160" height="34" rx="6"/><text x="210" y="162" font-size="13">NAT gateway</text>
+<rect class="a" x="440" y="50" width="220" height="175" rx="8"/><text x="454" y="74" font-size="14">Private subnet</text>
+<rect class="b" x="458" y="90" width="180" height="34" rx="6"/><text x="470" y="112" font-size="13">App / database</text>
+<line x1="140" y1="125" x2="180" y2="125" stroke="#888" stroke-width="2"/>
+<path d="M458 120 L358 157" stroke="#888" stroke-width="2" fill="none" stroke-dasharray="5 4"/>
+<text x="400" y="200" font-size="11" class="m">private route: 0.0.0.0/0 → NAT gateway</text>
+</svg><figcaption>Outbound-only for private servers: they reach out through NAT; nothing reaches in.</figcaption></figure>
+
+<h2>2. Security Group vs Network ACL</h2>
+<table><tr><th></th><th>Security Group</th><th>Network ACL</th></tr>
+<tr><td>Protects</td><td>An instance (its network interface)</td><td>A whole subnet</td></tr>
+<tr><td>State</td><td><b>Stateful</b>: replies auto-allowed</td><td><b>Stateless</b>: allow both directions yourself</td></tr>
+<tr><td>Rules</td><td>Allow only</td><td>Allow and <b>Deny</b>, evaluated in number order</td></tr>
+<tr><td>Default</td><td>Deny in, allow out</td><td>Default NACL allows all</td></tr></table>
+<div class="box analogy"><b class="t">Analogy</b>The NACL is the estate guard at the street entrance (can ban a specific car). The security group is the door on each house, with a guest list. A pro move: let the DB's security group allow port 3306 <i>from the web server's security group</i> instead of an IP address.</div>
+
+<h2>3. Reaching AWS services privately: VPC endpoints</h2>
+<p>Normally traffic to S3 leaves via the internet. A <b>gateway endpoint</b> (S3 and DynamoDB only, <b>free</b>) adds a route so traffic stays on AWS's network. An <b>interface endpoint</b> (PrivateLink, most other services) puts a private IP in your subnet and costs per hour.</p>
+
+<h2>4. Lab: a private server nobody can reach</h2>
+<div class="box warn"><b class="t">Cost safety</b>A <b>NAT gateway costs about USD 0.045/hour plus data</b> and an Elastic IP. Do the NAT part in one sitting and delete it right after (it's 15 minutes of cost, a few cents). Never leave one overnight.</div>
+<ol class="steps">
+<li>Reuse your Day 8 VPC (rebuild if you deleted it, it takes 5 minutes now!). Add a subnet <code>day9-private-a</code>, <code>10.0.2.0/24</code>, same AZ, <b>no</b> public IP.</li>
+<li>Create a route table <code>day9-private-rt</code> (only the local route) and associate it with the private subnet.</li>
+<li>Launch a <b>web server</b> in the public subnet (security group: SSH from My IP) and a <b>second instance</b> in the private subnet. Its security group allows SSH <b>from the web server's security group</b> only.</li>
+<li>SSH into the public one with agent forwarding: <code>ssh -A -i key.pem ec2-user@PUBLIC_IP</code>, then <code>ssh ec2-user@PRIVATE_IP</code>. You hopped through a <b>bastion host</b>.</li>
+<li>On the private instance run <code>curl -m 5 https://example.com</code>. It times out: no way out.</li>
+<li>Create a <b>NAT gateway</b> in the <i>public</i> subnet with a new Elastic IP. Edit <code>day9-private-rt</code>: <code>0.0.0.0/0 → NAT gateway</code>. Re-run <code>curl</code>. Now it works.</li>
+<li><b>Cleanup (critical):</b> delete the NAT gateway, wait till "Deleted", release the Elastic IP, terminate both instances, remove the VPC pieces.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day09-private-rt.png</code> and the curl timeout/success terminal output</div>
+
+<h2>5. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>NAT gateway lives in a <b>public</b> subnet, is managed by AWS, and is AZ-specific.</li>
+<li>Bastion host = jump server in a public subnet. The modern alternative is <b>Systems Manager Session Manager</b> (no open SSH port).</li>
+<li>Need to block one bad IP? Use a NACL deny. Security groups can't deny.</li>
+<li>Private access to S3 for free: gateway endpoint.</li></ul></div>
+
+<h2>6. Quiz</h2>
+<details><summary>Q1. Which is stateless: security group or NACL?</summary>NACL.</details>
+<details><summary>Q2. Private instances must download patches. What do you add?</summary>A NAT gateway in a public subnet, plus a route from the private subnet.</details>
+<details><summary>Q3. Block a malicious IP at subnet level?</summary>NACL deny rule.</details>
+<details><summary>Q4. Cheapest private path from EC2 to S3?</summary>S3 gateway endpoint (free).</details>
+<details><summary>Q5. Where must the NAT gateway be placed?</summary>In a public subnet.</details>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Reached a private instance through a bastion</label></li>
+<li><label><input type="checkbox" data-id="b"> Saw curl fail, then succeed after NAT</label></li>
+<li><label><input type="checkbox" data-id="c"> <b>Deleted the NAT gateway and released the Elastic IP</b></label></li>
+<li><label><input type="checkbox" data-id="d"> Can explain SG vs NACL in 30 seconds</label></li>
+</ul>

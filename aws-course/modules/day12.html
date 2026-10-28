@@ -1,0 +1,80 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 12 - Encryption and Secrets: KMS, ACM, Secrets Manager</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day12">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 12</span><span class="badge">Security · Lab</span><span class="badge">⏱ 1.5h</span></p><h1>Encryption and Secrets: KMS, ACM, Secrets Manager</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain encryption at rest vs in transit, create a KMS key, encrypt an S3 object with it, and prove that a user without key permission is locked out.</div>
+
+<h2>1. First principles: if someone steals the box, can they read it?</h2>
+<p>Security asks three questions: <b>who</b> can get in (IAM, Day 3), <b>what</b> can they do, and <b>if all defences fail, is the data still unreadable?</b> The last one is encryption.</p>
+<table><tr><th>Type</th><th>Protects</th><th>Analogy</th><th>AWS</th></tr>
+<tr><td>At rest</td><td>Data stored on disk</td><td>Documents locked in a safe</td><td>KMS with S3, EBS, RDS</td></tr>
+<tr><td>In transit</td><td>Data moving over a network</td><td>Armoured van, not an open pickup</td><td>TLS/HTTPS, certificates from ACM</td></tr></table>
+
+<h2>2. KMS: the key vault</h2>
+<p><b>KMS (Key Management Service)</b> creates and guards encryption keys. The key never leaves KMS in plain form. Services ask KMS to encrypt/decrypt, and KMS checks IAM permissions first.</p>
+<div class="box analogy"><b class="t">Analogy: bank safe-deposit boxes</b>Your files are in the box (S3). The master key stays in the bank's vault (KMS). To open the box you need both: access to the file <i>and</i> permission to use the key. Even an admin of S3 is blocked without key permission.</div>
+<figure>
+<svg viewBox="0 0 700 170" role="img" aria-label="Envelope encryption">
+<g font-size="13">
+<rect class="b" x="10" y="60" width="110" height="50" rx="8"/><text x="28" y="90">Your data</text>
+<rect class="a" x="190" y="20" width="170" height="50" rx="8"/><text x="206" y="50">Data key (temp)</text>
+<rect class="c" x="190" y="100" width="170" height="50" rx="8"/><text x="204" y="130">KMS key (in vault)</text>
+<rect class="b" x="440" y="60" width="240" height="50" rx="8"/><text x="452" y="82">Stored: encrypted data</text><text x="452" y="100" font-size="11" class="m">+ encrypted copy of data key</text>
+</g>
+<line x1="120" y1="85" x2="190" y2="45" stroke="#888" stroke-width="2"/><line x1="275" y1="100" x2="275" y2="70" stroke="#888" stroke-width="2"/><line x1="360" y1="45" x2="440" y2="80" stroke="#888" stroke-width="2"/>
+</svg><figcaption>Envelope encryption: KMS makes a data key; the data key encrypts your data; KMS encrypts the data key.</figcaption></figure>
+<table><tr><th>Key type</th><th>Who manages</th><th>Cost</th></tr>
+<tr><td>AWS owned</td><td>AWS, invisible to you</td><td>Free</td></tr>
+<tr><td>AWS managed (<code>aws/s3</code>)</td><td>AWS, visible in your account</td><td>Free, auto-rotates yearly</td></tr>
+<tr><td>Customer managed</td><td>You (policy, rotation, disable)</td><td>~USD 1/month per key + usage</td></tr></table>
+
+<h2>3. Two more pieces</h2>
+<ul><li><b>ACM (Certificate Manager):</b> free public TLS certificates that auto-renew, for CloudFront/ALB/API Gateway. You can't download them for use on your own EC2.</li>
+<li><b>Secrets Manager:</b> stores database passwords/API keys, encrypted, retrieved at runtime, with automatic rotation (~USD 0.40 per secret/month). <b>Parameter Store</b> (in Systems Manager) is the cheaper option for plain config and simple secrets.</li></ul>
+<p>Rule: <b>never put a password in code, an AMI, or Git.</b> Fetch it at runtime with an IAM role.</p>
+
+<h2>4. Lab: lock a file behind your own key</h2>
+<div class="box warn"><b class="t">Cost safety</b>A customer managed key costs ~USD 1/month, pro-rated. KMS keys can't be deleted instantly: you <b>schedule deletion</b> (min 7 days). Do it at the end; pennies.</div>
+<ol class="steps">
+<li>KMS → <b>Create key</b> → Symmetric → alias <code>day12-key</code>. Key administrators: you. Key users: you.</li>
+<li>S3 → new bucket <code>day12-enc-YOURNAME-123</code> → under <b>Default encryption</b> choose <b>SSE-KMS</b> and select <code>day12-key</code>. Upload a text file <code>secret.txt</code>.</li>
+<li>Open the object → it shows <i>Server-side encryption: AWS-KMS</i> and your key ARN. Download it: works, because you can use the key.</li>
+<li><b>Break it on purpose:</b> in IAM create a user <code>day12-reader</code> with only the <b>AmazonS3ReadOnlyAccess</b> policy (no KMS rights). Sign in to that user in a private browser window and try to download <code>secret.txt</code>. Result: <b>Access Denied (KMS)</b>. S3 permission alone isn't enough.</li>
+<li>Fix it by adding that user under the key's <b>Key users</b>, retry: success.</li>
+<li><b>Bonus (CLI):</b> store and read a secret:
+<pre><code>aws secretsmanager create-secret --name day12/dbpass --secret-string "S3cretPassw0rd!"
+aws secretsmanager get-secret-value --secret-id day12/dbpass --query SecretString --output text
+aws secretsmanager delete-secret --secret-id day12/dbpass --force-delete-without-recovery</code></pre></li>
+<li><b>Cleanup:</b> delete the object/bucket, delete the IAM user, <b>schedule key deletion</b> (7 days).</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day12-access-denied.png</code> (the KMS denial) and the object's encryption panel. Blur the key ARN's account id.</div>
+
+<h2>5. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Encryption at rest by default: S3 now encrypts all new objects (SSE-S3). Use SSE-KMS for audit and key control.</li>
+<li>KMS usage is logged in <b>CloudTrail</b> (tomorrow).</li>
+<li>Passwords → Secrets Manager (rotation) or Parameter Store. Certificates → ACM.</li>
+<li><b>CloudHSM</b> = dedicated hardware you control, for strict compliance. KMS = managed and shared hardware.</li></ul></div>
+
+<h2>6. Quiz</h2>
+<details><summary>Q1. Who can decrypt an SSE-KMS object?</summary>Someone with S3 access to the object <b>and</b> permission to use the KMS key.</details>
+<details><summary>Q2. Where do you keep a DB password with auto-rotation?</summary>Secrets Manager.</details>
+<details><summary>Q3. Free HTTPS certificate for CloudFront?</summary>ACM.</details>
+<details><summary>Q4. Customer needs sole control of hardware keys (compliance)?</summary>CloudHSM.</details>
+<details><summary>Q5. In transit vs at rest examples?</summary>TLS/HTTPS vs EBS/S3 encryption.</details>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Created a KMS key and encrypted an object</label></li>
+<li><label><input type="checkbox" data-id="b"> Saw the denial for a user without key rights</label></li>
+<li><label><input type="checkbox" data-id="c"> Scheduled key deletion, deleted test user</label></li>
+</ul>
+<nav class="pn"><a href="day11.html">← Day 11: CloudFront: Fast and Secure Delivery</a><a href="day13.html">Day 13: Who Did What? CloudTrail, CloudWatch and Threat Defence (Weekend Lab) →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>
