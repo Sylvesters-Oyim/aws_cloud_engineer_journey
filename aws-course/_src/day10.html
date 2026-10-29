@@ -1,0 +1,80 @@
+<!--meta {"n":10,"title":"DNS and Route 53","time":"1.5h","week":2,"tag":"Networking · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Trace what happens when you type a web address, read DNS records with <code>dig</code>, and explain Route 53 record types and routing policies. Optionally, point a real domain at your server.</div>
+
+<h2>1. First principles: computers talk in numbers, people in names</h2>
+<p>Servers are found by IP address (<code>203.0.113.10</code>). Humans remember names (<code>example.com</code>). <b>DNS (Domain Name System)</b> is the global phone book translating one to the other. <b>Amazon Route 53</b> is AWS's DNS service (53 is the DNS port number).</p>
+<div class="box analogy"><b class="t">Analogy: asking for directions</b>
+Your laptop asks a <b>resolver</b> (a helpful local who knows shortcuts: "where is shop.example.com?"). If it doesn't know, it asks the <b>root</b> ("who handles .com?"), then the <b>.com registry</b> ("who handles example.com?"), then the domain's <b>name servers</b> (the shop's own receptionist: "it's at 203.0.113.10"). The answer is remembered for a while (the <b>TTL</b>) so the next ask is instant.</div>
+<figure>
+<svg viewBox="0 0 700 230" role="img" aria-label="DNS lookup steps">
+<g font-size="13"><rect class="b" x="10" y="85" width="100" height="50" rx="8"/><text x="28" y="115">Browser</text>
+<rect class="a" x="160" y="85" width="120" height="50" rx="8"/><text x="178" y="108">Resolver</text><text x="178" y="125" font-size="11" class="m">(caches answers)</text>
+<rect class="b" x="350" y="15" width="100" height="40" rx="8"/><text x="372" y="40">Root</text>
+<rect class="b" x="350" y="95" width="100" height="40" rx="8"/><text x="375" y="120">.com</text>
+<rect class="a" x="350" y="175" width="190" height="40" rx="8"/><text x="362" y="200">Route 53 name servers</text>
+<rect class="b" x="590" y="175" width="100" height="40" rx="8"/><text x="604" y="200">Web server</text></g>
+<path class="l" d="M110 110 L160 110"/><path class="l" d="M280 100 L350 38"/><path class="l" d="M280 112 L350 115"/><path class="l" d="M280 125 L350 192"/><path class="l" d="M540 195 L590 195"/>
+<text x="200" y="165" font-size="11" class="m">1 ask · 2 root · 3 .com · 4 NS · 5 IP</text>
+</svg><figcaption>Five questions, answered in milliseconds, then cached.</figcaption></figure>
+
+<h2>2. Record types you must know</h2>
+<table><tr><th>Record</th><th>Maps</th><th>Example</th></tr>
+<tr><td><b>A</b></td><td>name → IPv4</td><td>shop.example.com → 203.0.113.10</td></tr>
+<tr><td><b>AAAA</b></td><td>name → IPv6</td><td></td></tr>
+<tr><td><b>CNAME</b></td><td>name → another name</td><td>www → shop.example.com. <b>Cannot be used at the zone apex</b> (example.com itself)</td></tr>
+<tr><td><b>Alias</b> (Route 53 only)</td><td>name → AWS resource (CloudFront, ALB, S3 site…)</td><td>Works at the apex, <b>free queries</b>, follows IP changes</td></tr>
+<tr><td><b>MX</b></td><td>mail servers</td><td></td></tr>
+<tr><td><b>TXT</b></td><td>free text; domain verification, SPF</td><td></td></tr>
+<tr><td><b>NS</b></td><td>which name servers are in charge</td><td></td></tr></table>
+
+<h3>Routing policies (Route 53's superpower)</h3>
+<table><tr><th>Policy</th><th>Behaviour</th><th>Real-life use</th></tr>
+<tr><td>Simple</td><td>One answer</td><td>A single website</td></tr>
+<tr><td>Weighted</td><td>Split traffic by % (90/10)</td><td>Canary release of a new version</td></tr>
+<tr><td>Latency</td><td>Send user to the lowest-latency Region</td><td>Global app in 2+ Regions</td></tr>
+<tr><td>Failover</td><td>Primary, switch to secondary if health check fails</td><td>Disaster recovery</td></tr>
+<tr><td>Geolocation</td><td>By user's country/continent</td><td>Legal or language rules</td></tr>
+<tr><td>Geoproximity</td><td>By distance, with adjustable bias</td><td>Shift load toward a Region</td></tr>
+<tr><td>Multivalue</td><td>Up to 8 healthy answers</td><td>Cheap client-side balancing</td></tr></table>
+
+<h2>3. Lab part A: be a DNS detective (free, 20 min)</h2>
+<pre><code>dig aws.amazon.com            # the answer + TTL
+dig +short NS amazon.com      # who is in charge of the domain
+dig +trace example.com        # watch root → .com → name server steps
+dig MX gmail.com +short       # mail records
+dig www.github.com            # spot the CNAME in the answer</code></pre>
+<p>If <code>dig</code> is missing: <code>sudo apt install dnsutils</code> (Debian/Ubuntu) or <code>sudo dnf install bind-utils</code>. Write down: what TTL did you see? Why would a short TTL matter before you migrate a website?</p>
+
+<h2>4. Lab part B: your own domain (optional, ~USD 3–15/yr)</h2>
+<div class="box warn"><b class="t">Cost safety</b>A hosted zone costs <b>USD 0.50/month</b> (not free-tier). Domain registration is a yearly fee (<code>.click</code> and similar are among the cheapest). Skip Part B if you'd rather not pay. You'll still pass the exam. Delete the hosted zone after the lab to stop the monthly charge.</div>
+<ol class="steps">
+<li>Route 53 → <b>Registered domains → Register</b> a cheap domain (or use one you own and point its nameservers to Route 53's NS records).</li>
+<li>Open the <b>hosted zone</b>. Launch your Day 8 web instance again (public subnet, port 80 open) and note its public IP.</li>
+<li><b>Create record</b>: name <code>www</code>, type A, value = the instance IP, TTL 60. Visit <code>http://www.yourdomain</code>.</li>
+<li>Add a second record <code>blue</code> weighted 50 and a third <code>green</code> weighted 50 pointing to different pages if you like, and refresh a few times to watch the split.</li>
+<li><b>Cleanup:</b> terminate the instance; delete the records and hosted zone; turn off auto-renew if you don't want to keep the domain.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>dig</code> output (Part A) in <code>evidence/day10-dig.png</code>, plus the hosted zone records if you did Part B.</div>
+
+<h2>5. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Route 53 does three jobs: <b>domain registration</b>, <b>DNS</b>, <b>health checks</b>.</li>
+<li>Apex domain to a CloudFront/ALB → use an <b>Alias</b> record, not CNAME.</li>
+<li>Failover = DR. Latency = performance. Geolocation = compliance/localisation. Weighted = gradual rollout.</li>
+<li>Route 53 is a <b>global</b> service with a 100% availability SLA.</li></ul></div>
+
+<h2>6. Quiz</h2>
+<details><summary>Q1. You want example.com (no www) to point to a CloudFront distribution. Record type?</summary>Alias (A) record. A CNAME is not allowed at the apex.</details>
+<details><summary>Q2. Send 10% of users to a new version first. Policy?</summary>Weighted routing.</details>
+<details><summary>Q3. Users in Germany must see the EU site. Policy?</summary>Geolocation routing.</details>
+<details><summary>Q4. Automatically move traffic to a standby site if the primary dies?</summary>Failover routing with a Route 53 health check.</details>
+<details><summary>Q5. What does TTL control?</summary>How long resolvers cache the answer.</details>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Ran <code>dig +trace</code> and explained each hop</label></li>
+<li><label><input type="checkbox" data-id="b"> Can name 5 record types and 4 routing policies</label></li>
+<li><label><input type="checkbox" data-id="c"> (Optional) Pointed a real domain to my server</label></li>
+<li><label><input type="checkbox" data-id="d"> Deleted any hosted zone and instance I created</label></li>
+</ul>

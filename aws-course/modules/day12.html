@@ -1,0 +1,94 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 12 - Security Services: KMS, CloudTrail, WAF and Friends</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day12">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 12</span><span class="badge">Security · Lab</span><span class="badge">⏱ 2h</span></p><h1>Security Services: KMS, CloudTrail, WAF and Friends</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Match any security question to the right AWS service, encrypt data with your own KMS key, and find out <i>who did what</i> in your account with CloudTrail. Security is the heaviest topic (30%) on both exams.</div>
+
+<h2>1. First principles: four questions of security</h2>
+<p>Almost every security service answers one of these. Learn the question, and the service name follows.</p>
+<table><tr><th>Question</th><th>Idea</th><th>Services</th></tr>
+<tr><td>Who are you / what may you do?</td><td>Identity & access</td><td>IAM, IAM Identity Center, Cognito, MFA</td></tr>
+<tr><td>Can anyone read it?</td><td>Encryption & secrets</td><td><b>KMS</b>, ACM, Secrets Manager, Parameter Store, CloudHSM</td></tr>
+<tr><td>Can attackers reach it?</td><td>Protection</td><td>Security Groups/NACL, <b>WAF</b>, <b>Shield</b>, Network Firewall</td></tr>
+<tr><td>What happened & is something wrong?</td><td>Detection & audit</td><td><b>CloudTrail</b>, CloudWatch, <b>Config</b>, <b>GuardDuty</b>, Inspector, Macie, Security Hub</td></tr></table>
+<div class="box analogy"><b class="t">Analogy: a bank</b>
+IAM = ID checks and staff badges. KMS = the vault and its keys. Security groups = doors and guards. WAF = the guard who inspects bags for weapons (web attacks). Shield = crowd control against a mob blocking the entrance (DDoS). <b>CloudTrail = CCTV logbook of every action.</b> Config = inventory that notices a window was left open. GuardDuty = the analyst who spots suspicious behaviour.</div>
+
+<h2>2. The services in one table (memorise the "tell")</h2>
+<table><tr><th>Service</th><th>Tell-tale phrase in an exam question</th></tr>
+<tr><td><b>KMS</b></td><td>"create and manage encryption keys"; integrates with S3, EBS, RDS. Keys never leave KMS unencrypted</td></tr>
+<tr><td><b>Secrets Manager</b></td><td>store & <b>auto-rotate</b> database passwords/API keys</td></tr>
+<tr><td><b>ACM</b></td><td>free public TLS/SSL certificates</td></tr>
+<tr><td><b>AWS WAF</b></td><td>block SQL injection / XSS / bad IPs at layer 7; attach to CloudFront, ALB, API Gateway</td></tr>
+<tr><td><b>Shield</b></td><td>DDoS. <b>Standard</b> is automatic and free; <b>Advanced</b> is paid with response team</td></tr>
+<tr><td><b>CloudTrail</b></td><td>"who made this API call, when, from where" (audit trail)</td></tr>
+<tr><td><b>CloudWatch</b></td><td>metrics, logs, alarms: "how is it performing?"</td></tr>
+<tr><td><b>Config</b></td><td>resource configuration history & compliance rules ("is every bucket encrypted?")</td></tr>
+<tr><td><b>GuardDuty</b></td><td>intelligent threat detection from logs; "compromised instance" "unusual API calls"</td></tr>
+<tr><td><b>Inspector</b></td><td>vulnerability scanning of EC2, containers, Lambda</td></tr>
+<tr><td><b>Macie</b></td><td>find <b>sensitive data/PII</b> in S3</td></tr>
+<tr><td><b>Security Hub</b></td><td>one dashboard aggregating findings from the others</td></tr>
+<tr><td><b>Artifact</b></td><td>download AWS compliance reports (SOC, ISO)</td></tr>
+<tr><td><b>Trusted Advisor</b></td><td>checks for cost, security, limits, resilience best practices</td></tr></table>
+<figure>
+<svg viewBox="0 0 700 200" role="img" aria-label="Layers of defence">
+<rect class="c" x="10" y="10" width="680" height="180" rx="12"/><text x="24" y="32" font-size="13" font-weight="700">Defence in depth</text>
+<g font-size="12"><rect class="a" x="30" y="52" width="115" height="60" rx="8"/><text x="42" y="78" font-weight="700">Edge</text><text x="42" y="96">Shield · WAF</text>
+<rect class="a" x="165" y="52" width="115" height="60" rx="8"/><text x="177" y="78" font-weight="700">Network</text><text x="177" y="96">SG · NACL · VPC</text>
+<rect class="a" x="300" y="52" width="115" height="60" rx="8"/><text x="312" y="78" font-weight="700">Identity</text><text x="312" y="96">IAM · MFA · roles</text>
+<rect class="a" x="435" y="52" width="115" height="60" rx="8"/><text x="447" y="78" font-weight="700">Data</text><text x="447" y="96">KMS · ACM</text>
+<rect class="a" x="570" y="52" width="105" height="60" rx="8"/><text x="582" y="78" font-weight="700">Watch</text><text x="582" y="96">Trail · GuardDuty</text></g>
+<text x="30" y="150" font-size="12" class="m">If one layer fails, the next still protects you. Never rely on a single control.</text>
+</svg><figcaption>Security is layers, not a single wall.</figcaption></figure>
+
+<h2>3. Lab: encrypt with KMS and read your own audit trail (75 min)</h2>
+<div class="box warn"><b class="t">Cost safety</b>A customer-managed KMS key costs <b>USD 1/month</b> (prorated hourly) plus tiny request fees. We will schedule it for deletion at the end (minimum waiting period 7 days; you stop paying once it's scheduled). CloudTrail <b>Event history</b> (last 90 days) is free.</div>
+<ol class="steps">
+<li><b>CloudTrail → Event history.</b> Filter <i>Event name = ConsoleLogin</i>. Find your own login: note source IP, time, and whether MFA was used. Then filter <i>Event name = RunInstances</i> to see your Day 5/8 launches. You can answer "who did what" for any API call.</li>
+<li><b>KMS → Create key</b>: Symmetric, Encrypt and decrypt. Alias <code>alias/day12-key</code>. Key administrators and users: your IAM user/role.</li>
+<li>Create bucket <code>yourname-day12-secure</code>. Properties → <b>Default encryption → SSE-KMS</b> → choose <code>day12-key</code>.</li>
+<li>Upload a text file. Open its properties: it shows the KMS key used. Now use the CLI:
+<pre><code>echo -n "my secret" &gt; plain.txt
+aws kms encrypt --key-id alias/day12-key --plaintext fileb://plain.txt \
+  --query CiphertextBlob --output text | base64 -d &gt; secret.bin
+aws kms decrypt --ciphertext-blob fileb://secret.bin --query Plaintext --output text | base64 -d</code></pre>
+Output: <code>my secret</code>. Notice you never held the key itself, only asked KMS to use it.</li>
+<li>Back in <b>CloudTrail Event history</b>, filter by event source <code>kms.amazonaws.com</code>: your Encrypt/Decrypt calls are logged within minutes.</li>
+<li><b>Break it:</b> in IAM, temporarily remove KMS permissions from your user (or use a role without them) and re-run decrypt: <code>AccessDeniedException</code>. Encryption is only as good as who may use the key.</li>
+<li>Browse (read-only) <b>GuardDuty</b>, <b>Security Hub</b>, <b>Config</b> and <b>Trusted Advisor</b> in the console to see what each looks like. Don't enable paid ones unless you want the 30-day trial.</li>
+<li><b>Cleanup:</b> empty & delete the bucket. KMS → select key → <b>Key actions → Schedule key deletion</b> (7 days).</li>
+</ol>
+<div class="shot">📸 Evidence: CloudTrail event showing your ConsoleLogin or Decrypt call: <code>evidence/day12-cloudtrail.png</code> (blur account ID and IP).</div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li><b>Shared Responsibility:</b> AWS secures the cloud (hardware, facilities, hypervisor). You secure what's <i>in</i> it (data, IAM, OS patches, firewall config, encryption choices).</li>
+<li>Encryption <b>at rest</b> (KMS: S3, EBS, RDS) and <b>in transit</b> (TLS via ACM).</li>
+<li>CloudTrail = API audit (who). CloudWatch = performance (how). Config = configuration (what changed).</li>
+<li>WAF = web exploits; Shield = DDoS; GuardDuty = threats; Inspector = vulnerabilities; Macie = PII in S3.</li>
+<li>Root user: MFA on, no access keys, use only for tasks that require it.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. An S3 bucket was deleted. Which service tells you who did it?</summary>CloudTrail.</details>
+<details><summary>Q2. Detect S3 buckets containing credit-card numbers?</summary>Amazon Macie.</details>
+<details><summary>Q3. Protect an ALB from SQL injection?</summary>AWS WAF.</details>
+<details><summary>Q4. Alert when someone makes a security group open to 0.0.0.0/0, and track the change history?</summary>AWS Config (rules + configuration timeline).</details>
+<details><summary>Q5. Auto-rotate an RDS database password?</summary>AWS Secrets Manager.</details>
+<details><summary>Q6. Which Shield tier is free and always on?</summary>Shield Standard.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Found my own ConsoleLogin in CloudTrail</label></li>
+<li><label><input type="checkbox" data-id="b"> Encrypted/decrypted with my KMS key</label></li>
+<li><label><input type="checkbox" data-id="c"> Scheduled the KMS key for deletion</label></li>
+<li><label><input type="checkbox" data-id="d"> Can match 8+ security services to their "tell"</label></li>
+</ul>
+<nav class="pn"><a href="day11.html">← Day 11: CloudFront: Make Your Site Fast and Safe Worldwide</a><a href="day13.html">Day 13: Weekend Project: A Secure Two-Tier Network with Monitoring →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

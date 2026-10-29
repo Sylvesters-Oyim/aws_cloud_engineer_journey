@@ -1,0 +1,80 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 14 - Week 2 Review and Cloud Practitioner Mini-Exam</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day14">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 14</span><span class="badge">Review · Quiz</span><span class="badge">⏱ 2–3h</span></p><h1>Week 2 Review and Cloud Practitioner Mini-Exam</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Score yourself against exam conditions, know exactly which topics to revisit, learn the billing and support topics the exam loves, and commit your progress to GitHub.</div>
+
+<h2>1. The billing & support cheat-sheet (CLF-C02 Domain 4)</h2>
+<table><tr><th>Topic</th><th>What to know</th></tr>
+<tr><td><b>Pricing principles</b></td><td>Pay as you go · pay less when you reserve · pay less per unit when you use more (tiered pricing) · data <b>IN</b> is generally free, data <b>OUT</b> to the internet costs</td></tr>
+<tr><td><b>Cost tools</b></td><td><b>Pricing Calculator</b> (estimate before), <b>Cost Explorer</b> (analyse past spend), <b>Budgets</b> (alerts), <b>Cost & Usage Report</b> (most detailed), <b>Cost Allocation Tags</b></td></tr>
+<tr><td><b>AWS Organizations</b></td><td>Multiple accounts, <b>consolidated billing</b>, volume discounts, Service Control Policies (SCPs)</td></tr>
+<tr><td><b>Support plans</b></td><td><b>Basic</b> (free: docs, Trusted Advisor core checks) · <b>Developer</b> (business-hours email) · <b>Business</b> (24/7, full Trusted Advisor, production) · <b>Enterprise On-Ramp / Enterprise</b> (TAM, mission critical). Only higher plans give a <b>Technical Account Manager</b></td></tr>
+<tr><td><b>Migration & other</b></td><td>Cloud Adoption Framework, Snow family (physical data transfer), Migration Hub, Marketplace</td></tr></table>
+<div class="box analogy"><b class="t">Analogy: phone data plans</b>Pay-as-you-go (On-Demand), a contract with discounts (Savings Plans/RIs), and a family plan sharing allowances across members (consolidated billing).</div>
+
+<h2>2. 25-question mini-exam (target: 40 min, no notes)</h2>
+<p>Write your answers on paper first, then open the answers. 18/25 (72%) or more is on track for the real pass mark of 70%.</p>
+<details><summary>1. A company wants to avoid upfront hardware purchases. Which cloud benefit?</summary>Trade capital expense for variable expense.</details>
+<details><summary>2. Which is the customer's responsibility under Shared Responsibility?</summary>Configuring IAM and security groups (and patching the guest OS on EC2).</details>
+<details><summary>3. What is an Availability Zone?</summary>One or more discrete data centres with independent power/networking inside a Region.</details>
+<details><summary>4. Which feature provides temporary credentials to an application on EC2?</summary>IAM role.</details>
+<details><summary>5. Which service stores unlimited objects with 11 nines durability?</summary>Amazon S3.</details>
+<details><summary>6. Which S3 class suits unknown access patterns?</summary>S3 Intelligent-Tiering.</details>
+<details><summary>7. Lowest-cost, rarely accessed archive with hours retrieval?</summary>S3 Glacier Deep Archive / Glacier Flexible Retrieval.</details>
+<details><summary>8. A subnet with a route to an internet gateway is called?</summary>Public subnet.</details>
+<details><summary>9. Which is stateless and supports deny rules?</summary>Network ACL.</details>
+<details><summary>10. Private instances need outbound internet only. Use?</summary>NAT gateway.</details>
+<details><summary>11. DNS service in AWS?</summary>Route 53.</details>
+<details><summary>12. Reduce latency for global users of a website?</summary>CloudFront.</details>
+<details><summary>13. Which service records API calls made in your account?</summary>CloudTrail.</details>
+<details><summary>14. Which service monitors performance metrics and alarms?</summary>CloudWatch.</details>
+<details><summary>15. Managed DDoS protection that is free for all customers?</summary>Shield Standard.</details>
+<details><summary>16. Block SQL injection on a web app?</summary>AWS WAF.</details>
+<details><summary>17. Create/manage encryption keys?</summary>AWS KMS.</details>
+<details><summary>18. Find PII in S3?</summary>Amazon Macie.</details>
+<details><summary>19. Estimate the cost of a planned architecture?</summary>AWS Pricing Calculator.</details>
+<details><summary>20. Get alerted when spend passes USD 10?</summary>AWS Budgets.</details>
+<details><summary>21. Which support plan first includes a Technical Account Manager?</summary>Enterprise (On-Ramp offers a pool of TAMs).</details>
+<details><summary>22. Consolidated billing belongs to which service?</summary>AWS Organizations.</details>
+<details><summary>23. Cheapest option for fault-tolerant batch jobs?</summary>Spot Instances.</details>
+<details><summary>24. Which EC2 storage disappears when the instance stops?</summary>Instance store.</details>
+<details><summary>25. Which Well-Architected pillar covers recovering from failure?</summary>Reliability.</details>
+
+<h2>3. Personal gap analysis (15 min, the most valuable step)</h2>
+<ol class="steps">
+<li>Make a list of every question you missed or guessed.</li>
+<li>For each, write <b>one sentence in your own words</b> and the analogy that makes it stick.</li>
+<li>Save it as <code>aws-course/notes/week2-gaps.md</code>.</li>
+<li>Re-attempt only those questions in 3 days (spaced repetition beats rereading).</li>
+</ol>
+
+<h2>4. Commit your progress</h2>
+<pre><code>cd ~/aws_cloud_engineer_journey
+git checkout -b week-2-notes
+# add evidence screenshots, labs/week2-architecture.md, notes/week2-gaps.md
+git add aws-course
+git diff --staged | grep -i -E "AKIA|secret|BEGIN RSA" &amp;&amp; echo "STOP: secrets found!"
+git commit -m "Week 2 complete: VPC, Route 53, CloudFront, security, CloudWatch"
+git push -u origin week-2-notes</code></pre>
+<p>Update the progress table in the repo <code>README.md</code> (⬜ → ✅).</p>
+
+<h2>5. Looking ahead: Week 3</h2>
+<p>Databases and decoupling basics for the Cloud Practitioner (RDS, DynamoDB, Lambda, SQS/SNS, ELB, Auto Scaling), then the Week 4 <b>exam sprint</b>: official exam guide, full practice tests, and booking CLF-C02.</p>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Mini-exam score ≥ 18/25</label></li>
+<li><label><input type="checkbox" data-id="b"> Wrote my gap list</label></li>
+<li><label><input type="checkbox" data-id="c"> Billing page shows nothing running (NAT, instances, EIPs, distributions)</label></li>
+<li><label><input type="checkbox" data-id="d"> Pushed Week 2 notes to GitHub and ticked the README table</label></li>
+</ul>
+<nav class="pn"><a href="day13.html">← Day 13: Weekend Project: A Secure Two-Tier Network with Monitoring</a><a href="../index.html">Course home →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

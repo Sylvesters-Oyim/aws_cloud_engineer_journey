@@ -1,0 +1,68 @@
+<!--meta {"n":8,"title":"VPC: Your Private Network in the Cloud","time":"2h","week":2,"tag":"Networking · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain what a VPC, subnet, route table and internet gateway are, read a CIDR block like <code>10.0.0.0/16</code>, and build your own network from scratch with a web server inside it.</div>
+
+<h2>1. First principles: why do we need a "VPC"?</h2>
+<p>In Week 1 you launched EC2 into a ready-made network without thinking about it. That was the <b>default VPC</b>. Real systems need control: <i>which machines can the internet see, which are hidden, and who can talk to whom?</i> A <b>VPC (Virtual Private Cloud)</b> is your own isolated slice of the AWS network where you decide all of that.</p>
+<div class="box analogy"><b class="t">Analogy: a gated estate</b>
+The <b>VPC</b> is the whole estate with a perimeter wall. <b>Subnets</b> are the streets inside it. The <b>internet gateway</b> is the main gate to the public road. <b>Route tables</b> are the signposts at each street ("to leave the estate, go to the gate"). A street with no signpost to the gate is a private street: residents can talk to each other but nobody from outside can drive in.</div>
+
+<h2>2. The five building blocks</h2>
+<table><tr><th>Piece</th><th>What it is</th><th>Key facts</th></tr>
+<tr><td><b>VPC</b></td><td>Your private network, in one Region</td><td>You pick an IP range (CIDR), e.g. <code>10.0.0.0/16</code> (65,536 addresses)</td></tr>
+<tr><td><b>Subnet</b></td><td>A smaller range carved out of the VPC</td><td>Lives in <b>one AZ</b>. AWS reserves <b>5 addresses</b> in each</td></tr>
+<tr><td><b>Route table</b></td><td>Rules: "traffic for X goes to Y"</td><td>Each subnet is associated with exactly one</td></tr>
+<tr><td><b>Internet Gateway (IGW)</b></td><td>Door between the VPC and the internet</td><td>Attached to a VPC; free</td></tr>
+<tr><td><b>Public IP / Elastic IP</b></td><td>The address the internet sees</td><td>Instance also needs a route to the IGW</td></tr></table>
+<div class="box exam"><b class="t">The rule that defines "public subnet"</b>A subnet is <b>public</b> if its route table has <code>0.0.0.0/0 → igw-xxxx</code>. That's the whole definition. No such route = private subnet.</div>
+
+<h3>CIDR in 60 seconds</h3>
+<p>An IP like <code>10.0.1.0/24</code> has 32 bits. The number after the slash says how many bits are <i>fixed</i> (the network part). The rest are free for hosts. So <code>/24</code> = 8 free bits = 2<sup>8</sup> = 256 addresses; <code>/16</code> = 16 free bits = 65,536. <b>Smaller number after the slash = bigger network.</b> Quick check: <code>/28</code> is the smallest subnet AWS allows (16 addresses, 11 usable).</p>
+<figure>
+<svg viewBox="0 0 700 300" role="img" aria-label="VPC with public subnet, route table and internet gateway">
+<g transform="translate(130,0)"><rect class="c" x="20" y="20" width="520" height="260" rx="12"/><text x="34" y="44" font-weight="700" font-size="14">VPC 10.0.0.0/16 (Region)</text>
+<rect class="a" x="50" y="64" width="220" height="190" rx="10"/><text x="62" y="88" font-weight="700" font-size="13">Public subnet 10.0.1.0/24</text><text x="62" y="106" font-size="12" class="m">AZ a</text>
+<rect class="b" x="66" y="120" width="190" height="54" rx="6"/><text x="78" y="143" font-size="13">EC2 web server</text><text x="78" y="162" font-size="12" class="m">public IP + SG: 80, 22</text>
+<rect class="b" x="66" y="190" width="190" height="52" rx="6"/><text x="78" y="212" font-size="12" font-weight="700">Route table</text><text x="78" y="231" font-size="11">local · 0.0.0.0/0 → IGW</text>
+<rect class="b" x="300" y="64" width="220" height="190" rx="10" stroke-dasharray="6 4"/><text x="312" y="88" font-weight="700" font-size="13">Private subnet 10.0.2.0/24</text><text x="312" y="106" font-size="12" class="m">AZ b · no route to IGW</text>
+<rect class="b" x="316" y="130" width="190" height="54" rx="6"/><text x="328" y="153" font-size="13">App / database</text><text x="328" y="172" font-size="12" class="m">no public IP</text></g>
+<rect class="a" x="10" y="95" width="100" height="70" rx="10"/><text x="26" y="125" font-size="13" font-weight="700">Internet</text><text x="26" y="145" font-size="12">Gateway</text>
+<path class="l" d="M110 147 L196 147"/><text x="112" y="138" font-size="11" class="m">default route</text>
+</svg><figcaption>Only the public subnet's route table points at the gateway. The private subnet can still reach the public one through the built-in <code>local</code> route.</figcaption></figure>
+
+<h2>3. Lab: build a VPC by hand (60 min)</h2>
+<div class="box warn"><b class="t">Cost safety</b>VPCs, subnets, route tables and IGWs are free. The one EC2 instance is the only cost. Terminate it at the end.</div>
+<ol class="steps">
+<li>Console → <b>VPC → Create VPC → "VPC only"</b>. Name <code>day8-vpc</code>, IPv4 CIDR <code>10.0.0.0/16</code>. Create.</li>
+<li><b>Subnets → Create subnet</b>: VPC = day8-vpc. Create <code>day8-public-a</code> (AZ a, <code>10.0.1.0/24</code>) and <code>day8-private-b</code> (AZ b, <code>10.0.2.0/24</code>).</li>
+<li><b>Internet gateways → Create</b> <code>day8-igw</code> → <b>Actions → Attach to VPC</b> → day8-vpc.</li>
+<li><b>Route tables → Create</b> <code>day8-public-rt</code> in day8-vpc. Open it → <b>Routes → Edit → Add</b> <code>0.0.0.0/0</code> → Internet Gateway → day8-igw. Then <b>Subnet associations</b> → attach <code>day8-public-a</code>.</li>
+<li>Select <code>day8-public-a</code> → <b>Actions → Edit subnet settings → enable auto-assign public IPv4</b>.</li>
+<li>Launch an EC2 (Amazon Linux 2023, free-tier type) with <b>Network = day8-vpc, Subnet = day8-public-a</b>, new security group (HTTP from anywhere, SSH from My IP) and the same user data as Day 5.</li>
+<li>Open its public IP in your browser. Your page is live in a network <i>you</i> built.</li>
+<li><b>Break it to learn it:</b> delete the <code>0.0.0.0/0</code> route in the route table and reload. It stops working even though the security group is fine. Routing and security are separate layers. Add the route back.</li>
+<li><b>Cleanup:</b> terminate the instance. Leave the VPC (free) for Day 9.</li>
+</ol>
+<div class="shot">📸 Evidence: VPC resource map (VPC → your VPC → "Resource map" tab) and the live page: <code>evidence/day08-vpc-map.png</code>.</div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>A VPC spans <b>all AZs in one Region</b>; a subnet lives in <b>one AZ</b>.</li>
+<li>The default VPC is <code>172.31.0.0/16</code> with a public subnet in every AZ.</li>
+<li>Public subnet = route to an IGW. Private = no such route.</li>
+<li>CIDR sizes allowed for VPCs: <code>/16</code> (largest) to <code>/28</code> (smallest).</li>
+<li>Every route table has an unremovable <code>local</code> route so resources in a VPC can reach each other.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. How many addresses does a /24 give, and how many can you actually use in AWS?</summary>256; 251 (AWS reserves 5).</details>
+<details><summary>Q2. Your instance has a public IP and open port 80 but the page times out. What do you check next?</summary>The subnet's route table: is there a <code>0.0.0.0/0</code> route to an internet gateway?</details>
+<details><summary>Q3. Can one subnet span two Availability Zones?</summary>No. A subnet is in exactly one AZ.</details>
+<details><summary>Q4. What makes a subnet "public"?</summary>A route to an Internet Gateway in its route table.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Built VPC, two subnets, IGW and route table by hand</label></li>
+<li><label><input type="checkbox" data-id="b"> Served a web page from my own VPC</label></li>
+<li><label><input type="checkbox" data-id="c"> Broke and fixed the route</label></li>
+<li><label><input type="checkbox" data-id="d"> Terminated the instance</label></li>
+</ul>

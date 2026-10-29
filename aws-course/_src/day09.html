@@ -1,0 +1,79 @@
+<!--meta {"n":9,"title":"Private Subnets, NAT and Network Security","time":"2h","week":2,"tag":"Networking · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Hide a server in a private subnet, reach it safely through a jump host, explain how NAT lets private servers go out without letting the internet in, and tell Security Groups from Network ACLs (a favourite exam question).</div>
+
+<h2>1. First principles: least exposure</h2>
+<p>A database or app server rarely needs to be reachable from the whole internet. The safest server is one the internet cannot even route to. But that server still needs to download patches. The pattern: <b>private subnet</b> (no inbound from internet) + <b>NAT gateway</b> (outbound only).</p>
+<div class="box analogy"><b class="t">Analogy: staff-only office floor</b>
+Visitors (internet) can reach the <b>reception</b> (public subnet). The <b>back office</b> (private subnet) has no street entrance. Staff there need to order supplies, so they hand requests to the <b>mail room</b> (NAT gateway) which sends them out under the company's address and passes replies back in. Strangers can't use the mail room to walk in.</div>
+<figure>
+<svg viewBox="0 0 700 270" role="img" aria-label="NAT gateway lets private instances reach internet outbound only">
+<rect class="a" x="10" y="95" width="90" height="70" rx="10"/><text x="30" y="135" font-weight="700" font-size="13">Internet</text>
+<rect class="c" x="130" y="15" width="560" height="240" rx="12"/><text x="144" y="38" font-weight="700" font-size="13">VPC</text>
+<rect class="a" x="150" y="55" width="230" height="180" rx="8"/><text x="162" y="78" font-size="13" font-weight="700">Public subnet</text>
+<rect class="b" x="166" y="92" width="195" height="44" rx="6"/><text x="178" y="119" font-size="13">Bastion / web server</text>
+<rect class="b" x="166" y="150" width="195" height="44" rx="6"/><text x="178" y="177" font-size="13">NAT gateway (+ Elastic IP)</text>
+<rect class="b" x="440" y="55" width="230" height="180" rx="8" stroke-dasharray="6 4"/><text x="452" y="78" font-size="13" font-weight="700">Private subnet</text>
+<rect class="b" x="456" y="110" width="195" height="54" rx="6"/><text x="468" y="133" font-size="13">App server</text><text x="468" y="152" font-size="12" class="m">no public IP</text>
+<path class="l" d="M100 125 L166 114"/><path class="l" d="M166 172 L100 150"/><path class="l" d="M456 140 L361 172"/>
+<text x="456" y="205" font-size="11" class="m">private RT: 0.0.0.0/0 → NAT</text>
+</svg><figcaption>Outbound: private server → NAT gateway → IGW → internet. The internet cannot start a connection in the other direction.</figcaption></figure>
+<div class="box warn"><b class="t">NAT gateway costs money</b>It bills <b>per hour (~USD 0.045 in many Regions) plus per GB processed</b>, plus its Elastic IP. Left running a month it's ~USD 32+. Create it only for the experiment and <b>delete it the same hour</b>. Alternatives: a NAT instance (cheaper, self-managed), or <b>VPC endpoints</b> (below), which often remove the need for NAT.</div>
+
+<h2>2. Security Group vs Network ACL</h2>
+<table><tr><th></th><th>Security Group</th><th>Network ACL (NACL)</th></tr>
+<tr><td>Analogy</td><td>Bodyguard at <b>your door</b></td><td>Border control at the <b>street entrance</b></td></tr>
+<tr><td>Level</td><td>Instance (network interface)</td><td>Subnet</td></tr>
+<tr><td>State</td><td><b>Stateful</b>: replies auto-allowed</td><td><b>Stateless</b>: allow both directions yourself</td></tr>
+<tr><td>Rules</td><td>Allow only</td><td>Allow <b>and Deny</b>, numbered, lowest first</td></tr>
+<tr><td>Default</td><td>Inbound denied, outbound allowed</td><td>Default NACL allows all</td></tr>
+<tr><td>Use for</td><td>Normal day-to-day access rules</td><td>Blocking a specific bad IP range</td></tr></table>
+<p><b>Neat trick:</b> a security group can reference <i>another security group</i> as its source (e.g. "DB accepts port 3306 only from the App SG"). No IP lists to maintain.</p>
+
+<h3>Other connectivity pieces (know what they are)</h3>
+<table><tr><th>Service</th><th>One-line purpose</th></tr>
+<tr><td>VPC Endpoint (Gateway: S3, DynamoDB; free)</td><td>Reach S3 over AWS's private network, no NAT or internet needed</td></tr>
+<tr><td>VPC Endpoint (Interface / PrivateLink)</td><td>Private IP in your subnet for many AWS or partner services</td></tr>
+<tr><td>VPC Peering</td><td>Connect two VPCs directly. <b>Not transitive</b> (A–B and B–C does not give A–C)</td></tr>
+<tr><td>Transit Gateway</td><td>Central hub connecting many VPCs and on-premises networks</td></tr>
+<tr><td>Site-to-Site VPN / Direct Connect</td><td>Encrypted tunnel over internet / dedicated private fibre to your office or data centre</td></tr>
+<tr><td>VPC Flow Logs</td><td>Records accepted/rejected traffic metadata for troubleshooting</td></tr></table>
+
+<h2>3. Lab: bastion + private server (75 min)</h2>
+<ol class="steps">
+<li>In <code>day8-vpc</code>, create a <b>private route table</b> <code>day9-private-rt</code> and associate it with <code>day8-private-b</code> (no IGW route, so it stays private).</li>
+<li>Create two security groups in the VPC: <code>bastion-sg</code> (SSH from My IP) and <code>app-sg</code> (SSH <b>source = bastion-sg</b>, not an IP).</li>
+<li>Launch <code>bastion</code> in <code>day8-public-a</code> (public IP, bastion-sg) and <code>app</code> in <code>day8-private-b</code> (<b>disable</b> public IP, app-sg). Use one key pair for both.</li>
+<li>From your terminal, hop through the bastion with agent forwarding (the key never leaves your laptop):
+<pre><code>ssh-add ~/.ssh/day9.pem
+ssh -A ec2-user@BASTION_PUBLIC_IP
+# now on the bastion:
+ssh ec2-user@APP_PRIVATE_IP      # works: SG allows bastion-sg
+ping -c2 8.8.8.8                 # fails/hangs: no route out yet</code></pre></li>
+<li><b>Give it outbound access (do this quickly):</b> create a NAT gateway in <code>day8-public-a</code> with a new Elastic IP. Add <code>0.0.0.0/0 → nat-xxxx</code> to <code>day9-private-rt</code>. Retest on the app server: <code>curl -I https://aws.amazon.com</code> now works. Try reaching it from the internet: still impossible.</li>
+<li><b>Cleanup NOW:</b> delete the NAT gateway, wait for "Deleted", then <b>release the Elastic IP</b>. Terminate both instances. Check <b>VPC → NAT gateways</b> and <b>Elastic IPs</b> are empty.</li>
+</ol>
+<div class="shot">📸 Evidence: terminal showing the hop into the private server + the NAT gateway page <b>before</b> deleting it: <code>evidence/day09-bastion-hop.png</code>.</div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>NAT gateway lives in a <b>public</b> subnet, needs an Elastic IP, and is <b>zonal</b>. For high availability use one per AZ.</li>
+<li>NAT = <b>outbound only</b>. IPv6 equivalent: egress-only internet gateway.</li>
+<li>Security group = stateful, allow-only. NACL = stateless, allow + deny.</li>
+<li>S3/DynamoDB from private subnets cheaply: <b>Gateway endpoint</b>.</li>
+<li>Peering is non-transitive. Many VPCs? Use Transit Gateway.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. Private instances must download OS patches but must not be reachable from the internet. Solution?</summary>NAT gateway in a public subnet, with the private route table sending 0.0.0.0/0 to it.</details>
+<details><summary>Q2. You must block one malicious IP address range from a whole subnet. Which tool?</summary>A Network ACL deny rule (security groups can't deny).</details>
+<details><summary>Q3. Why must a NACL have rules for both inbound and outbound?</summary>It is stateless; return traffic isn't automatically allowed.</details>
+<details><summary>Q4. Cheapest private path from a private subnet to S3?</summary>A gateway VPC endpoint for S3 (free, no NAT charges).</details>
+<details><summary>Q5. VPC A peers with B, B peers with C. Can A reach C?</summary>No. Peering is not transitive.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> SSH'd into a private server via the bastion</label></li>
+<li><label><input type="checkbox" data-id="b"> Gave it outbound access with NAT, then proved inbound is still impossible</label></li>
+<li><label><input type="checkbox" data-id="c"> <b>Deleted NAT gateway and released the Elastic IP</b></label></li>
+<li><label><input type="checkbox" data-id="d"> Terminated both instances</label></li>
+</ul>

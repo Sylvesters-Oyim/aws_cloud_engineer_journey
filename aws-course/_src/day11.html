@@ -1,0 +1,69 @@
+<!--meta {"n":11,"title":"CloudFront: Make Your Site Fast and Safe Worldwide","time":"2h","week":2,"tag":"Delivery · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Put a private S3 bucket behind CloudFront so your static website is served over HTTPS from servers near every visitor, and nobody can bypass CloudFront to hit the bucket directly.</div>
+
+<h2>1. First principles: distance is slow</h2>
+<p>Light needs time to travel. A visitor in Nairobi fetching a page from a server in Virginia waits for many round trips across oceans. Fix: keep <b>copies close to users</b>. <b>CloudFront</b> is AWS's <b>CDN (Content Delivery Network)</b> with hundreds of <b>edge locations</b> worldwide that cache your content.</p>
+<div class="box analogy"><b class="t">Analogy: a bookstore chain</b>
+The <b>origin</b> (S3 bucket) is the publisher's warehouse far away. <b>Edge locations</b> are local bookshops. First customer asks for a book: the shop orders it from the warehouse (<b>cache miss</b>), keeps a copy, and every next customer is served from the shelf (<b>cache hit</b>) until the copy is stale (<b>TTL</b> expires).</div>
+<figure>
+<svg viewBox="0 0 700 230" role="img" aria-label="CloudFront cache hit and miss">
+<g font-size="13"><rect class="b" x="10" y="85" width="90" height="50" rx="8"/><text x="28" y="115">Viewer</text>
+<rect class="a" x="190" y="70" width="150" height="80" rx="8"/><text x="205" y="98" font-weight="700">Edge location</text><text x="205" y="118" font-size="12">cache: index.html ✔</text><text x="205" y="136" font-size="12" class="m">near the viewer</text>
+<rect class="b" x="470" y="70" width="140" height="80" rx="8"/><text x="487" y="98" font-weight="700">Origin</text><text x="487" y="118" font-size="12">private S3 bucket</text></g>
+<path class="l" d="M100 100 L190 100"/><text x="112" y="92" font-size="11" class="m">1 request</text>
+<path class="l" d="M190 125 L100 125"/><text x="108" y="144" font-size="11" class="m">fast reply (hit)</text>
+<path class="l" d="M340 100 L470 100" stroke-dasharray="5 4"/><text x="352" y="92" font-size="11" class="m">only on miss</text>
+<text x="190" y="200" font-size="12" class="m">HTTPS · compression · DDoS absorption (Shield Standard) included</text>
+</svg><figcaption>After the first request, most visitors never touch your origin.</figcaption></figure>
+
+<h2>2. Vocabulary</h2>
+<table><tr><th>Term</th><th>Meaning</th></tr>
+<tr><td>Distribution</td><td>One CloudFront setup, with its own <code>dxxxx.cloudfront.net</code> domain</td></tr>
+<tr><td>Origin</td><td>Where the real content lives: S3, ALB, EC2, any HTTP server</td></tr>
+<tr><td>TTL</td><td>How long edges keep a copy</td></tr>
+<tr><td>Invalidation</td><td>Force edges to drop cached files now (<code>/*</code>). First 1,000 paths/month free</td></tr>
+<tr><td>OAC (Origin Access Control)</td><td>Lets CloudFront, and <b>only</b> CloudFront, read a private bucket. Replaces the older OAI</td></tr>
+<tr><td>ACM certificate</td><td>Free TLS cert for your own domain. For CloudFront it must be requested in <b>us-east-1</b></td></tr>
+<tr><td>Price class</td><td>Limit which edge regions you use to cut cost</td></tr></table>
+
+<h2>3. Lab: private bucket + CloudFront (75 min)</h2>
+<div class="box warn"><b class="t">Cost safety</b>Cost is pennies for light traffic, but delete the distribution afterwards (disable first, wait, then delete). Check the current CloudFront pricing/plan page: AWS has changed plans recently.</div>
+<ol class="steps">
+<li>Create an S3 bucket <code>yourname-day11-site</code> with <b>Block all public access ON</b> (the opposite of Day 6's public site).</li>
+<li>Upload an <code>index.html</code> (reuse your nginx-lab page or write a new one with an image).</li>
+<li>CloudFront → <b>Create distribution</b>. Origin domain = your bucket (pick the S3 option, not "website endpoint"). Origin access = <b>Origin access control settings</b> → Create new OAC (defaults).</li>
+<li>Set <b>Default root object</b> = <code>index.html</code>. Viewer protocol policy = <b>Redirect HTTP to HTTPS</b>. Skip WAF for now. Create.</li>
+<li>CloudFront shows a banner with a <b>bucket policy to copy</b>. Open the bucket → Permissions → Bucket policy → paste → save.</li>
+<li>Wait ~3–5 min for "Last modified" to replace "Deploying". Open <code>https://dxxxx.cloudfront.net</code>: your site, over HTTPS.</li>
+<li><b>Prove the lock:</b> try the bucket's own URL: <code>Access Denied</code>. Only CloudFront can read it.</li>
+<li><b>Watch the cache:</b>
+<pre><code>curl -sI https://dxxxx.cloudfront.net | grep -i x-cache
+# first:  x-cache: Miss from cloudfront
+# again:  x-cache: Hit from cloudfront</code></pre></li>
+<li>Edit <code>index.html</code>, re-upload, reload: you may still see the old version (cached!). Run <b>Invalidations → Create → <code>/*</code></b> and reload to see the new one.</li>
+<li><b>Cleanup:</b> disable the distribution, wait until deployed, delete it. Empty and delete the bucket.</li>
+</ol>
+<div class="shot">📸 Evidence: browser on the https cloudfront URL + terminal showing Miss then Hit: <code>evidence/day11-cloudfront.png</code>.</div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>CloudFront = CDN for <b>static and dynamic</b> content, improves latency <i>and</i> offloads the origin.</li>
+<li>Keep S3 private; use <b>OAC</b>. Public buckets for websites are a legacy pattern.</li>
+<li>Edge → CloudFront. Don't confuse with <b>Global Accelerator</b> (routes TCP/UDP over the AWS backbone to a fixed anycast IP, no caching).</li>
+<li>CloudFront integrates with <b>WAF</b> (block attacks) and <b>Shield</b> (DDoS), and supports geo-restriction.</li>
+<li><b>S3 Transfer Acceleration</b> speeds <i>uploads</i> to a bucket over long distances.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. Users worldwide complain a static site is slow. Fix with least effort?</summary>Put CloudFront in front of the S3 origin.</details>
+<details><summary>Q2. How do you allow only CloudFront to read a bucket?</summary>Origin Access Control + a bucket policy that trusts the distribution.</details>
+<details><summary>Q3. You updated a file but visitors still see the old one. What now?</summary>Create an invalidation (or wait for TTL / use versioned file names).</details>
+<details><summary>Q4. Which service gives static anycast IPs and non-cached global routing?</summary>AWS Global Accelerator.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Site served over HTTPS from CloudFront with a private bucket</label></li>
+<li><label><input type="checkbox" data-id="b"> Saw a cache Miss then Hit</label></li>
+<li><label><input type="checkbox" data-id="c"> Used an invalidation</label></li>
+<li><label><input type="checkbox" data-id="d"> Deleted distribution and bucket</label></li>
+</ul>

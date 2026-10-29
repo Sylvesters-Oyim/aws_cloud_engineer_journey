@@ -1,0 +1,70 @@
+<!--meta {"n":13,"title":"Weekend Project: A Secure Two-Tier Network with Monitoring","time":"3–4h","week":2,"tag":"Project · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Combine Week 1 and 2 into one architecture: a web server in a public subnet, an app server hidden in a private subnet, least-privilege security groups, an alarm that emails you when CPU spikes, and a billing guard. You'll also document it as a portfolio piece.</div>
+
+<h2>1. The target architecture</h2>
+<figure>
+<svg viewBox="0 0 700 280" role="img" aria-label="Two-tier architecture with monitoring">
+<rect class="a" x="10" y="100" width="80" height="60" rx="10"/><text x="24" y="135" font-size="13" font-weight="700">Users</text>
+<rect class="c" x="120" y="15" width="440" height="250" rx="12"/><text x="134" y="38" font-weight="700" font-size="13">VPC 10.0.0.0/16</text>
+<rect class="a" x="140" y="55" width="190" height="195" rx="8"/><text x="152" y="78" font-size="12" font-weight="700">Public subnet</text>
+<rect class="b" x="152" y="92" width="166" height="56" rx="6"/><text x="162" y="115" font-size="13">web (nginx)</text><text x="162" y="134" font-size="11" class="m">SG: 80 from all</text>
+<rect class="b" x="152" y="165" width="166" height="40" rx="6"/><text x="162" y="190" font-size="12">Internet gateway route</text>
+<rect class="b" x="350" y="55" width="190" height="195" rx="8" stroke-dasharray="6 4"/><text x="362" y="78" font-size="12" font-weight="700">Private subnet</text>
+<rect class="b" x="362" y="92" width="166" height="56" rx="6"/><text x="372" y="115" font-size="13">app server</text><text x="372" y="134" font-size="11" class="m">SG: 8080 from web-sg only</text>
+<rect class="b" x="362" y="165" width="166" height="40" rx="6"/><text x="372" y="190" font-size="12">no internet route</text>
+<path class="l" d="M90 130 L152 118"/><path class="l" d="M318 120 L362 120"/>
+<rect class="b" x="585" y="40" width="105" height="58" rx="8"/><text x="595" y="64" font-size="12" font-weight="700">CloudWatch</text><text x="595" y="82" font-size="11">alarm → SNS email</text>
+<rect class="b" x="585" y="120" width="105" height="58" rx="8"/><text x="595" y="144" font-size="12" font-weight="700">CloudTrail</text><text x="595" y="162" font-size="11">audit log</text>
+<rect class="b" x="585" y="200" width="105" height="58" rx="8"/><text x="595" y="224" font-size="12" font-weight="700">Budgets</text><text x="595" y="242" font-size="11">cost alert</text>
+</svg><figcaption>Web tier is exposed on port 80 only. The app tier can be reached solely from the web tier's security group.</figcaption></figure>
+
+<h2>2. Concept first: CloudWatch in 5 minutes</h2>
+<p><b>CloudWatch</b> collects <b>metrics</b> (numbers over time such as CPU), <b>logs</b>, and fires <b>alarms</b> that trigger actions like an email through <b>SNS</b> (Simple Notification Service).</p>
+<div class="box analogy"><b class="t">Analogy: a car dashboard</b>Metrics are the gauges. The alarm is the warning light plus a buzzer. SNS is the buzzer wired to your phone.</div>
+<ul>
+<li>EC2 reports basic metrics every <b>5 minutes</b> free (<b>1 minute</b> with detailed monitoring, paid). It does <b>not</b> report memory or disk usage unless you install the CloudWatch agent.</li>
+<li>Alarm states: <code>OK</code>, <code>ALARM</code>, <code>INSUFFICIENT_DATA</code>.</li>
+<li><b>EventBridge</b> reacts to events ("instance stopped") and schedules tasks like cron.</li></ul>
+
+<h2>3. Project steps (aim for 3 hours)</h2>
+<div class="box warn"><b class="t">Cost safety</b>Two small instances for a few hours is fine. No NAT gateway in this project. Terminate everything at the end.</div>
+<ol class="steps">
+<li><b>Network (reuse Day 8):</b> <code>day8-vpc</code> with <code>day8-public-a</code> (has IGW route) and <code>day8-private-b</code> (no IGW route). Verify in the VPC Resource map.</li>
+<li><b>Security groups:</b> <code>web-sg</code>: HTTP 80 from anywhere, SSH from My IP. <code>app-sg</code>: TCP 8080 and SSH <b>only from web-sg</b>.</li>
+<li><b>App tier:</b> launch <code>app</code> in the private subnet, no public IP, with user data that serves something on 8080:
+<pre><code>#!/bin/bash
+mkdir /srv/app &amp;&amp; echo '{"status":"ok","tier":"app"}' &gt; /srv/app/health.json
+cd /srv/app &amp;&amp; nohup python3 -m http.server 8080 &amp;</code></pre></li>
+<li><b>Web tier:</b> launch <code>web</code> in the public subnet with nginx (Day 5 user data). SSH in and prove tier-to-tier access:
+<pre><code>curl http://APP_PRIVATE_IP:8080/health.json   # works: from web-sg
+# from your laptop the same IP is unreachable. That's the point.</code></pre></li>
+<li><b>Reverse proxy (stretch goal):</b> on web, configure nginx <code>location /api/ { proxy_pass http://APP_PRIVATE_IP:8080/; }</code> and test <code>http://WEB_IP/api/health.json</code> from your laptop. This is how real two-tier apps work.</li>
+<li><b>Monitoring:</b> SNS → Create topic <code>day13-alerts</code> → create an <b>email subscription</b> and confirm it from your inbox. CloudWatch → Alarms → Create alarm on <code>CPUUtilization</code> of <code>web</code>, threshold &gt; 60% for 1 datapoint, action = your SNS topic.</li>
+<li><b>Trigger the alarm:</b> on web run <code>for i in 1 2; do (timeout 600 sh -c "while :; do :; done" &amp;); done</code> (two busy loops for 10 minutes; no install needed). Within ~5-10 minutes the alarm goes red and an email arrives. Stop it early with <code>pkill -f "while :"</code>.</li>
+<li><b>Review security:</b> run <b>IAM → Access Analyzer</b> or check <b>Trusted Advisor</b> for open ports. Verify root MFA is on and you have a budget alert (Day 2).</li>
+<li><b>Document it.</b> In the repo create <code>aws-course/labs/week2-architecture.md</code> containing: the diagram above (redrawn in your own words), the security group table, what you'd change for production (e.g., two AZs, a load balancer, HTTPS), and 5 sentences on what confused you.</li>
+<li><b>Cleanup:</b> terminate both instances, delete the alarm and SNS topic. Leave the VPC (free).</li>
+</ol>
+<div class="shot">📸 Evidence: the alarm in ALARM state + the email + VPC resource map: <code>evidence/day13-alarm.png</code>, <code>evidence/day13-architecture.png</code>.</div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Tiering = security + scaling boundary. Public tier minimal, data tier private.</li>
+<li>CloudWatch alarms can notify (SNS), scale (Auto Scaling), or act on EC2 (stop/reboot/recover).</li>
+<li>Memory metrics need the <b>CloudWatch agent</b>.</li>
+<li>AWS Well-Architected has six pillars: Operational Excellence, Security, Reliability, Performance Efficiency, Cost Optimization, Sustainability.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. How do you let only the web tier talk to the app tier?</summary>App security group allows the port with source = web security group.</details>
+<details><summary>Q2. Which service sends the email when an alarm fires?</summary>SNS (Simple Notification Service).</details>
+<details><summary>Q3. Why can't CloudWatch show EC2 memory by default?</summary>Memory is inside the guest OS; AWS only sees hypervisor-level metrics. Install the CloudWatch agent.</details>
+<details><summary>Q4. Name three Well-Architected pillars.</summary>Any of: Operational Excellence, Security, Reliability, Performance Efficiency, Cost Optimization, Sustainability.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Web reached app privately; laptop could not</label></li>
+<li><label><input type="checkbox" data-id="b"> CloudWatch alarm fired and emailed me</label></li>
+<li><label><input type="checkbox" data-id="c"> Wrote <code>labs/week2-architecture.md</code></label></li>
+<li><label><input type="checkbox" data-id="d"> Terminated instances, deleted alarm/topic</label></li>
+</ul>
