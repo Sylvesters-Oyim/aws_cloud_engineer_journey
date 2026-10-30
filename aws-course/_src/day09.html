@@ -1,0 +1,74 @@
+<!--meta {"n":9,"title":"Security Groups, NACLs and NAT","time":"1.5–2h","week":2,"tag":"Networking · Security"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Control traffic with security groups and NACLs, explain stateful vs stateless, and let private servers reach the internet without being reachable from it.</div>
+
+<h2>1. Two layers of firewall</h2>
+<div class="box analogy"><b class="t">Analogy: a hotel</b>
+The <b>NACL</b> is the guard at the hotel's front gate checking everyone entering <i>and</i> leaving the street (subnet level). The <b>security group</b> is the lock on each room door (instance level). The room lock remembers guests: if you let someone in, they can walk out freely (stateful). The gate guard keeps no memory, so every direction needs its own rule (stateless).</div>
+<table><tr><th></th><th>Security group</th><th>Network ACL</th></tr>
+<tr><td>Level</td><td>Instance / network interface</td><td>Subnet</td></tr>
+<tr><td>State</td><td><b>Stateful</b>: replies are automatically allowed</td><td><b>Stateless</b>: allow return traffic explicitly (ephemeral ports 1024–65535)</td></tr>
+<tr><td>Rules</td><td>Allow only. Everything else denied</td><td>Allow <b>and</b> Deny, evaluated by rule number, lowest first</td></tr>
+<tr><td>Default</td><td>Inbound: deny all. Outbound: allow all</td><td>Default NACL allows all in and out</td></tr>
+<tr><td>Can reference</td><td>Another security group (very powerful)</td><td>IP ranges only</td></tr></table>
+<p>In practice: use security groups for 95% of work. Reach for a NACL when you need an explicit <b>deny</b>, for example blocking one abusive IP range.</p>
+
+<h2>2. Security group chaining: the pattern to learn</h2>
+<figure>
+<svg viewBox="0 0 700 170" role="img" aria-label="Chained security groups">
+<rect class="b" x="10" y="55" width="100" height="50" rx="8"/><text x="25" y="85" font-size="13">Internet 🌍</text>
+<rect class="a" x="190" y="35" width="150" height="90" rx="8"/><text x="205" y="58" font-size="13" font-weight="700">web-sg</text><text x="205" y="78" font-size="12">80/443 from 0.0.0.0/0</text><text x="205" y="98" font-size="12">Web server</text>
+<rect class="c" x="440" y="35" width="150" height="90" rx="8"/><text x="455" y="58" font-size="13" font-weight="700">db-sg</text><text x="455" y="78" font-size="12">3306 from web-sg only</text><text x="455" y="98" font-size="12">Database</text>
+<path class="l" d="M110 80 L190 80"/><path class="l" d="M340 80 L440 80"/>
+</svg><figcaption>The database accepts traffic only from members of web-sg, whatever their IPs.</figcaption></figure>
+
+<h2>3. NAT: outbound-only internet</h2>
+<p>Your private database server still needs to download patches. But it must <b>not</b> be reachable from outside. A <b>NAT Gateway</b> sits in a <i>public</i> subnet; private subnets route <code>0.0.0.0/0</code> to it. Requests go out, replies come back, nobody can start a connection inbound.</p>
+<div class="box analogy"><b class="t">Analogy: company switchboard</b>Staff make outside calls through the switchboard; callers see only the company number and cannot dial a staff member's desk directly.</div>
+<div class="box warn"><b class="t">NAT costs real money</b>A NAT Gateway bills per hour (about USD 0.045/hr, roughly USD 32/month) plus per GB. <b>Create it, test it, delete it in the same session.</b> Release its Elastic IP afterwards.</div>
+
+<h2>4. Lab</h2>
+<h3>Part A: security group chaining</h3>
+<ol class="steps">
+<li>EC2 → Security groups → create <code>web-sg</code> in <code>lab-vpc</code>: inbound HTTP 80 from <code>0.0.0.0/0</code>, SSH 22 from <b>My IP</b>.</li>
+<li>Create <code>db-sg</code>: inbound <b>Custom TCP 3306</b>, source = the <code>web-sg</code> security group (type its name, don't use an IP).</li>
+<li>Read the two groups side by side and explain out loud who can reach the database. Only web-sg members.</li>
+</ol>
+<h3>Part B: private instance + NAT</h3>
+<ol class="steps">
+<li>Launch a second EC2 in <code>private-a</code> with <b>no public IP</b>, security group <code>db-sg</code>. Use <b>EC2 Instance Connect Endpoint</b> or Session Manager (attach the <code>AmazonSSMManagedInstanceCore</code> role) to get a shell without opening SSH. If that's fiddly, SSH via your public instance as a jump box.</li>
+<li>In the shell run <code>curl -m 5 https://example.com</code>. It times out: there is no route out.</li>
+<li>VPC → NAT gateways → <b>Create</b>: subnet <code>public-a</code>, connectivity public, <b>Allocate Elastic IP</b>.</li>
+<li>Route tables → create <code>private-rt</code>: <code>0.0.0.0/0</code> → the NAT gateway. Associate with <code>private-a</code>.</li>
+<li>Re-run the curl. It now works. From your laptop you still can't reach this instance. Outbound only. That's the design.</li>
+<li><b>Cleanup now:</b> delete the NAT gateway, wait until "Deleted", then release the Elastic IP. Remove the <code>private-rt</code> NAT route. Stop the instances.</li>
+</ol>
+<h3>Part C: NACL deny</h3>
+<ol class="steps">
+<li>Network ACLs → create <code>lab-nacl</code>, associate with <code>public-a</code>. Notice a brand-new custom NACL denies everything.</li>
+<li>Add inbound rule 100 allow HTTP 80 from 0.0.0.0/0, outbound rule 100 allow custom TCP 1024–65535 to 0.0.0.0/0 (the return traffic). Browse your public instance: works.</li>
+<li>Add inbound rule 90 <b>deny</b> HTTP from <b>your own IP</b> <code>/32</code>. Rule 90 is checked before 100, so you are blocked. Delete it and you're back.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day09-sg-chain.png</code> and the curl timeout vs success.</div>
+
+<h2>5. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Security group = stateful, allow-only, instance level. NACL = stateless, allow + deny, subnet level.</li>
+<li>NAT Gateway: private subnet → internet, outbound only. Lives in a public subnet, is AZ-scoped (one per AZ for resilience).</li>
+<li>"Block a specific IP" almost always means a NACL (or WAF for web traffic).</li>
+<li>Bastion host / Session Manager: ways to administer private instances.</li></ul></div>
+
+<h2>6. Quiz</h2>
+<details><summary>Q1. You must explicitly deny one malicious IP range at the subnet. What?</summary>Network ACL deny rule.</details>
+<details><summary>Q2. Private instances need OS updates but no inbound access. What?</summary>NAT Gateway in a public subnet + route from the private subnet.</details>
+<details><summary>Q3. You allowed inbound 80 on a security group. Do you also add an outbound rule for replies?</summary>No. Security groups are stateful.</details>
+<details><summary>Q4. Custom NACL just created: what traffic does it allow?</summary>None. It denies everything until you add rules (the default NACL allows all).</details>
+<details><summary>Q5. Best way to allow only the app tier to hit the database?</summary>DB security group with the app security group as the source.</details>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Built web-sg / db-sg chain</label></li>
+<li><label><input type="checkbox" data-id="b"> Proved private subnet works only after the NAT route</label></li>
+<li><label><input type="checkbox" data-id="c"> <b>Deleted NAT gateway and released the Elastic IP</b></label></li>
+<li><label><input type="checkbox" data-id="d"> Used a NACL deny and removed it</label></li>
+</ul>

@@ -1,0 +1,67 @@
+<!--meta {"n":14,"title":"Well-Architected, Support Plans and Week 2 Review","time":"2–4h","week":2,"tag":"Review · Quiz"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Judge any design against the six Well-Architected pillars, pick the right AWS Support plan, and pass a 15-question Week 2 mock.</div>
+
+<h2>1. The Well-Architected Framework</h2>
+<p>AWS distilled years of customer mistakes into six questions to ask about <i>any</i> system. Memorise them; they appear on both exams.</p>
+<div class="box analogy"><b class="t">Analogy: inspecting a house before buying</b>Strong foundations (reliability), good locks (security), cheap bills (cost), fast lifts (performance), easy maintenance (operational excellence), and a small environmental footprint (sustainability).</div>
+<table><tr><th>Pillar</th><th>Key question</th><th>Example tactic</th></tr>
+<tr><td>Operational excellence</td><td>Can we run and improve it?</td><td>Infrastructure as code, runbooks, small frequent changes</td></tr>
+<tr><td>Security</td><td>Is it protected?</td><td>Least privilege, MFA, encrypt everything</td></tr>
+<tr><td>Reliability</td><td>Does it recover from failure?</td><td>Multi-AZ, backups, auto scaling</td></tr>
+<tr><td>Performance efficiency</td><td>Are we using the right resources?</td><td>Right instance type, CDN, serverless</td></tr>
+<tr><td>Cost optimization</td><td>Are we avoiding waste?</td><td>Right-sizing, Savings Plans, turn off idle</td></tr>
+<tr><td>Sustainability</td><td>Are we minimising impact?</td><td>Efficient hardware, higher utilisation</td></tr></table>
+<p>Also know the <b>6 advantages of cloud</b> (exam): trade fixed for variable expense; benefit from massive economies of scale; stop guessing capacity; increase speed and agility; stop spending money running data centres; go global in minutes.</p>
+
+<h2>2. Support plans and cost tools</h2>
+<table><tr><th>Plan</th><th>For</th><th>Highlights</th></tr>
+<tr><td>Basic</td><td>Everyone, free</td><td>Docs, forums, Health Dashboard, 7 core Trusted Advisor checks</td></tr>
+<tr><td>Developer</td><td>Experimenting</td><td>Business-hours email to Cloud Support Associates</td></tr>
+<tr><td>Business</td><td>Production workloads</td><td>24/7 phone/chat/email, full Trusted Advisor, 1-hour response for production system down</td></tr>
+<tr><td>Enterprise On-Ramp / Enterprise</td><td>Mission-critical</td><td>Technical Account Manager(s), fastest response (15 min business-critical down)</td></tr></table>
+<table><tr><th>Tool</th><th>Use</th></tr>
+<tr><td>Pricing Calculator</td><td>Estimate cost <i>before</i> building (you did this on Day 1)</td></tr>
+<tr><td>Cost Explorer</td><td>Analyse past and forecast spend</td></tr>
+<tr><td>Budgets</td><td>Alerts when cost/usage crosses a threshold (Day 2)</td></tr>
+<tr><td>Cost allocation tags</td><td>Break down spend by project, like your <code>Project=week2</code> tag</td></tr>
+<tr><td>Organizations + consolidated billing</td><td>Many accounts, one bill, shared volume discounts</td></tr>
+<tr><td>Trusted Advisor</td><td>Checks for cost, security, performance, fault tolerance, limits</td></tr></table>
+<p>Support plan details change; verify at <code>aws.amazon.com/premiumsupport/plans</code> before the exam.</p>
+
+<h2>3. Week 2 mini lab (20 minutes)</h2>
+<ol class="steps">
+<li>Open <b>Billing → Cost Explorer</b> (enable it, data takes up to 24h). Group by Service. Which service cost you most this fortnight?</li>
+<li>Open Tag Editor and search resources in your Region. Any leftovers from Days 8–13? Delete them.</li>
+<li>Pull up the Well-Architected Tool (console) and read the Security pillar questions for 5 minutes. No need to complete a review.</li>
+<li>Commit your progress: tick off Week 2 in the main README, add your project README and evidence, then <code>git add . && git commit -m "Week 2 complete" && git push</code>.</li>
+</ol>
+
+<h2>4. Week 2 mock exam (15 questions, aim for 12+)</h2>
+<details><summary>1. A subnet is public because its route table has a route to ____.</summary>An Internet Gateway.</details>
+<details><summary>2. Stateless firewall at subnet level that supports deny rules?</summary>Network ACL.</details>
+<details><summary>3. Private instances need outbound internet only. Use?</summary>NAT Gateway.</details>
+<details><summary>4. Which record type maps the zone apex to a CloudFront distribution?</summary>Alias.</details>
+<details><summary>5. Route users to the lowest-latency Region?</summary>Route 53 latency-based routing.</details>
+<details><summary>6. Standby website that takes over automatically?</summary>Failover routing + health check.</details>
+<details><summary>7. Reduce latency for static assets worldwide?</summary>CloudFront.</details>
+<details><summary>8. Keep S3 private behind CloudFront?</summary>Origin Access Control.</details>
+<details><summary>9. Service that records API calls for auditing?</summary>CloudTrail.</details>
+<details><summary>10. Managed DDoS protection included at no cost?</summary>AWS Shield Standard.</details>
+<details><summary>11. Free way to reach S3 from a private subnet without NAT?</summary>S3 gateway VPC endpoint.</details>
+<details><summary>12. Who is responsible for patching guest OS on EC2?</summary>The customer.</details>
+<details><summary>13. Which support plan first includes 24/7 phone/chat access?</summary>Business (Developer is business-hours email only).</details>
+<details><summary>14. Which Well-Architected pillar covers multi-AZ and backups?</summary>Reliability.</details>
+<details><summary>15. Tool to estimate a deployment's monthly cost before building?</summary>AWS Pricing Calculator.</details>
+<p><b>Score below 12?</b> Re-do the lab for the days where you missed answers; reading again won't fix it.</p>
+
+<h2>5. Next week</h2>
+<div class="box warn"><b class="t">Coming in Week 3</b>Databases (RDS, DynamoDB), monitoring with CloudWatch, then your first full Cloud Practitioner practice exams. Book the CLF-C02 exam for the end of Week 4. A date on the calendar changes everything.</div>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Can recite the six pillars</label></li>
+<li><label><input type="checkbox" data-id="b"> Can match support plan to scenario</label></li>
+<li><label><input type="checkbox" data-id="c"> Scored 12+ on the mock</label></li>
+<li><label><input type="checkbox" data-id="d"> Cleaned up and pushed Week 2 to GitHub</label></li>
+</ul>

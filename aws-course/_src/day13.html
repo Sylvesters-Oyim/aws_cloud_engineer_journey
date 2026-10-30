@@ -1,0 +1,62 @@
+<!--meta {"n":13,"title":"Weekend Project: Secure Two-Tier Network","time":"3–4h","week":2,"tag":"Project · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Design and build, without copying a recipe, a network with a public web tier and a private tier, endpoints to S3 without internet, and tear it all down cleanly. This is your first portfolio-worthy project.</div>
+
+<h2>1. The brief</h2>
+<p>You are the cloud engineer for a small shop. The client wants a web page that the world can see, an internal "app" server nobody outside can touch, and a file bucket the app can use <b>without sending traffic over the public internet</b>. Budget: near zero.</p>
+<figure>
+<svg viewBox="0 0 700 270" role="img" aria-label="Target architecture">
+<rect class="b" x="10" y="100" width="90" height="50" rx="8"/><text x="22" y="130" font-size="13">Internet 🌍</text>
+<rect class="c" x="130" y="10" width="420" height="250" rx="12"/><text x="145" y="32" font-weight="700" font-size="14">project-vpc 10.20.0.0/16</text>
+<rect class="a" x="150" y="50" width="180" height="190" rx="8"/><text x="162" y="72" font-size="13" font-weight="700">public-a 10.20.1.0/24</text>
+<rect class="b" x="165" y="95" width="150" height="50" rx="6"/><text x="180" y="116" font-size="12">web (nginx)</text><text x="180" y="132" font-size="11" class="m">web-sg: 80 from world</text>
+<rect class="b" x="350" y="50" width="180" height="190" rx="8"/><text x="362" y="72" font-size="13" font-weight="700">private-a 10.20.2.0/24</text>
+<rect class="b" x="365" y="95" width="150" height="50" rx="6"/><text x="380" y="116" font-size="12">app server</text><text x="380" y="132" font-size="11" class="m">app-sg: 8080 from web-sg</text>
+<rect class="a" x="365" y="175" width="150" height="45" rx="6"/><text x="380" y="195" font-size="12">S3 gateway endpoint</text><text x="380" y="210" font-size="11" class="m">free, private path</text>
+<path class="l" d="M100 125 L150 125"/><path class="l" d="M315 120 L365 120"/>
+<rect class="b" x="590" y="175" width="100" height="50" rx="8"/><text x="615" y="205" font-size="13">S3 bucket</text><path class="l" d="M515 198 L590 198" stroke-dasharray="4 4"/>
+</svg><figcaption>No NAT gateway needed: the private server reaches S3 through a gateway endpoint.</figcaption></figure>
+
+<h2>2. Requirements (the checklist you build against)</h2>
+<ol>
+<li>New VPC <code>project-vpc</code> <code>10.20.0.0/16</code>; one public and one private subnet. (Stretch: a second AZ for both.)</li>
+<li>Web server in the public subnet serving a page you made, reachable on HTTP from anywhere, SSH only from your IP.</li>
+<li>App server in the private subnet, <b>no public IP</b>, reachable on 8080 <b>only</b> from <code>web-sg</code>. Admin via Session Manager (no SSH port open).</li>
+<li>S3 bucket (private, encrypted). Add a <b>Gateway VPC endpoint</b> for S3 on the private route table. Prove the app server can <code>aws s3 ls</code> with no NAT.</li>
+<li>Everything tagged <code>Project=week2</code> so you can find and delete it.</li>
+</ol>
+
+<h2>3. Hints (only if stuck, in this order)</h2>
+<details><summary>Hint 1: the build order</summary>VPC → subnets → IGW → route tables → security groups → instances → endpoint → test.</details>
+<details><summary>Hint 2: private instance needs an IAM role</summary>Create an EC2 role with <code>AmazonSSMManagedInstanceCore</code> (Session Manager) and a small S3 read policy on your bucket. Attach it as an instance profile. Never put access keys on the instance.</details>
+<details><summary>Hint 3: Session Manager from a private subnet with no NAT</summary>It needs three Interface endpoints (ssm, ssmmessages, ec2messages), which cost money per hour. Cheaper for this lab: temporarily use EC2 Instance Connect Endpoint, or SSH via the web server as a jump host with <code>ssh -J</code> and then delete it. State which you used in your notes.</details>
+<details><summary>Hint 4: the S3 endpoint test</summary>In VPC → Endpoints → Create → <code>com.amazonaws.REGION.s3</code> type Gateway → select <code>private-rt</code>. Then on the app server: <code>aws s3 ls</code>. Remove the endpoint and watch it hang: that proves the path.</details>
+
+<h2>4. Document it like a professional</h2>
+<ol class="steps">
+<li>Create <code>labs/week2-two-tier/README.md</code> in the repo: goal, diagram (redraw the picture above by hand or in draw.io), the CIDRs, the security group rules table, and what you'd improve (multi-AZ, ALB, HTTPS).</li>
+<li>Add screenshots to <code>evidence/</code>: VPC resource map, security group rules, the S3 command working from the private server.</li>
+<li>Redact: no account ID, key IDs or instance public IPs in anything committed.</li>
+</ol>
+
+<h2>5. Teardown order (dependency order matters)</h2>
+<ol class="steps">
+<li>Terminate instances → 2. Delete the S3 endpoint → 3. Empty and delete the bucket → 4. Delete route table associations and custom route tables → 5. Detach and delete the IGW → 6. Delete subnets → 7. Delete security groups → 8. Delete the VPC.</li>
+<li>Use <b>Billing → Bills</b> and <b>Cost Explorer</b> tomorrow to confirm there is nothing running. Tag Editor with <code>Project=week2</code> finds stragglers.</li>
+</ol>
+
+<h2>6. Reflection (write 5 lines in your README)</h2>
+<ul>
+<li>What was the hardest bug? How did you find it?</li>
+<li>Which AWS rule did you break and learn from?</li>
+<li>Explain "why is the private server private" in one sentence to a non-technical friend.</li>
+</ul>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Public web page reachable from the internet</label></li>
+<li><label><input type="checkbox" data-id="b"> App server reachable only from web-sg</label></li>
+<li><label><input type="checkbox" data-id="c"> S3 reached through the gateway endpoint</label></li>
+<li><label><input type="checkbox" data-id="d"> README + evidence committed (nothing secret)</label></li>
+<li><label><input type="checkbox" data-id="e"> All resources deleted</label></li>
+</ul>

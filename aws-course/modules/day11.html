@@ -1,0 +1,69 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 11 - CloudFront: A Global CDN with HTTPS</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day11">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 11</span><span class="badge">Edge · Lab</span><span class="badge">⏱ 1.5–2h</span></p><h1>CloudFront: A Global CDN with HTTPS</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain what a CDN does, put CloudFront in front of a private S3 bucket, get HTTPS for free, and clear the cache.</div>
+
+<h2>1. First principles: distance is latency</h2>
+<p>Light is fast, but a request from Nairobi to a server in Virginia still takes ~250 ms round trip, many times over for a page full of images. The fix is to keep <b>copies close to users</b>. A <b>CDN (Content Delivery Network)</b> does exactly that, and <b>CloudFront</b> is AWS's CDN, with hundreds of <b>edge locations</b> worldwide.</p>
+<div class="box analogy"><b class="t">Analogy: a newspaper</b>The printing press (your <b>origin</b>, e.g. S3) is in one city. Instead of everyone fetching from it, copies are delivered to corner shops (<b>edge locations</b>). First customer of the day causes a delivery (<b>cache miss</b>); everyone after buys from the shelf (<b>cache hit</b>). <b>TTL</b> is how long before the shop discards the old paper.</div>
+<figure>
+<svg viewBox="0 0 700 190" role="img" aria-label="CloudFront cache hit and miss">
+<rect class="b" x="10" y="70" width="90" height="50" rx="8"/><text x="25" y="100" font-size="13">User 🌍</text>
+<rect class="a" x="190" y="60" width="150" height="70" rx="8"/><text x="205" y="85" font-size="13" font-weight="700">Edge location</text><text x="205" y="105" font-size="11">cache: logo.png ✔</text>
+<rect class="b" x="470" y="60" width="150" height="70" rx="8"/><text x="485" y="85" font-size="13" font-weight="700">Origin: S3</text><text x="485" y="105" font-size="11" class="m">private bucket</text>
+<path class="l" d="M100 95 L190 95"/><text x="105" y="85" font-size="11" class="m">1. request</text>
+<path class="l" d="M340 95 L470 95" stroke-dasharray="4 4"/><text x="352" y="85" font-size="11" class="m">2. only on a miss</text>
+<text x="10" y="170" font-size="12" class="m">Hit = served in a few ms from the edge. Miss = edge fetches from origin, then caches it.</text>
+</svg><figcaption>Hit ratio is the metric that decides cost and speed.</figcaption></figure>
+<p>Benefits: lower latency, less load on the origin, free <b>HTTPS</b> (certificate from <b>ACM</b>), and built-in protection (AWS Shield Standard; WAF can be attached). Origins can be S3, an ALB, an EC2 or any web server.</p>
+
+<h2>2. Lab: private S3 website, global and HTTPS</h2>
+<p>This upgrades your Day 6 website: the bucket stays <b>private</b>, and only CloudFront may read it using <b>Origin Access Control (OAC)</b>.</p>
+<ol class="steps">
+<li>Create a new bucket <code>yourname-cdn-lab-12345</code>, <b>keep Block Public Access ON</b>. Upload <code>index.html</code> (any page, add a heading and an image).</li>
+<li>CloudFront → <b>Create distribution</b>. Origin domain: pick your S3 bucket. Origin access: <b>Origin access control settings (recommended)</b> → create control. Default root object: <code>index.html</code>.</li>
+<li>Viewer protocol policy: <b>Redirect HTTP to HTTPS</b>. WAF: choose the cheaper "do not enable" option for the lab. Create.</li>
+<li>CloudFront shows a banner with a <b>bucket policy</b>: Copy policy → open the bucket → Permissions → Bucket policy → paste → Save.</li>
+<li>Wait for status <b>Deployed</b> (2 to 5 minutes). Open <code>https://dxxxxxxxx.cloudfront.net</code>. Your page loads over HTTPS from a private bucket.</li>
+<li><b>Prove it's private:</b> try the direct S3 object URL. <code>AccessDenied</code>. Only CloudFront gets in.</li>
+<li><b>Watch the cache:</b>
+<pre><code>curl -sI https://dxxxxxxxx.cloudfront.net/ | grep -i x-cache</code></pre>
+First time <code>Miss from cloudfront</code>, second time <code>Hit from cloudfront</code>.</li>
+<li>Edit <code>index.html</code> and re-upload. The old content still shows (cached). Distribution → <b>Invalidations → Create</b> with path <code>/*</code>. Refresh: new content. (The first 1,000 invalidation paths a month are free.)</li>
+<li><b>Cleanup:</b> Disable the distribution, wait, then Delete. Empty and delete the bucket.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day11-cloudfront-https.png</code> (padlock visible) and the Hit/Miss headers.</div>
+<p>Custom domain bonus (if you did Day 10): request a certificate in <b>ACM in us-east-1</b> (required for CloudFront), add the domain as an alternate name on the distribution, then create a Route 53 <b>Alias</b> record to it.</p>
+
+<h2>3. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>CloudFront = CDN, global edge locations, caches content, reduces latency. Pricing: pay per request and data out; data from S3 to CloudFront is free.</li>
+<li>OAC keeps S3 private. The old way (OAI) is legacy; OAC is current.</li>
+<li>CloudFront certificates must be requested in <b>us-east-1</b>.</li>
+<li>Dynamic and static content both work; use TTL and invalidations to control freshness.</li>
+<li>Don't confuse: <b>CloudFront</b> caches content at the edge; <b>Global Accelerator</b> speeds up TCP/UDP traffic over the AWS backbone with static anycast IPs (no caching).</li></ul></div>
+
+<h2>4. Quiz</h2>
+<details><summary>Q1. Global users complain about slow image loads from an S3 bucket in one Region. Fix?</summary>Put CloudFront in front of the bucket.</details>
+<details><summary>Q2. How do you keep the S3 bucket private but let CloudFront read it?</summary>Origin Access Control plus a bucket policy for the distribution.</details>
+<details><summary>Q3. You updated a file but visitors still see the old one. Quick fix?</summary>Create an invalidation (or use versioned filenames).</details>
+<details><summary>Q4. Which Region must hold an ACM certificate for CloudFront?</summary>us-east-1 (N. Virginia).</details>
+<details><summary>Q5. CloudFront vs Global Accelerator?</summary>CloudFront caches content; Global Accelerator routes traffic over AWS's network to the best endpoint, no caching.</details>
+
+<h2>5. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> HTTPS site served from a private bucket</label></li>
+<li><label><input type="checkbox" data-id="b"> Saw Miss then Hit headers</label></li>
+<li><label><input type="checkbox" data-id="c"> Ran an invalidation</label></li>
+<li><label><input type="checkbox" data-id="d"> Deleted the distribution and bucket</label></li>
+</ul>
+<nav class="pn"><a href="day10.html">← Day 10: Route 53 and DNS: Names for Your Servers</a><a href="day12.html">Day 12: Security Services: Keys, Secrets, Logs and Guards →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

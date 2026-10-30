@@ -1,0 +1,90 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 12 - Security Services: Keys, Secrets, Logs and Guards</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day12">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 12</span><span class="badge">Security · Lab</span><span class="badge">⏱ 1.5–2h</span></p><h1>Security Services: Keys, Secrets, Logs and Guards</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Say which AWS security service answers which question, encrypt data with KMS, store a secret properly, and audit who did what with CloudTrail. Security is 30% of the Cloud Practitioner exam, so this day pays off.</div>
+
+<h2>1. First principles: five questions of security</h2>
+<p>Every service below answers one plain question about your house:</p>
+<table><tr><th>Question</th><th>Home analogy</th><th>AWS service</th></tr>
+<tr><td>Who may enter and what may they do?</td><td>Keys and guest rules</td><td><b>IAM</b> (Day 3)</td></tr>
+<tr><td>Is my data unreadable if stolen?</td><td>A safe</td><td><b>KMS</b> (encryption keys), ACM (certificates)</td></tr>
+<tr><td>Where do I keep the passwords?</td><td>A lockbox, not a sticky note</td><td><b>Secrets Manager</b>, SSM Parameter Store</td></tr>
+<tr><td>Who did what, when?</td><td>CCTV recordings</td><td><b>CloudTrail</b> (API calls), CloudWatch (metrics/logs), Config (configuration history)</td></tr>
+<tr><td>Is someone attacking or misbehaving?</td><td>Alarm system and security guard</td><td><b>GuardDuty</b> (threat detection), <b>Inspector</b> (vulnerability scans), <b>Macie</b> (finds sensitive data in S3)</td></tr>
+<tr><td>Block attacks at the door?</td><td>Fence and bouncers</td><td><b>WAF</b> (web exploits: SQL injection, bots), <b>Shield</b> (DDoS; Standard is free and automatic)</td></tr></table>
+
+<h2>2. Shared responsibility, again</h2>
+<div class="box analogy"><b class="t">Analogy: renting a flat</b>AWS is the landlord: building, locks on the main door, power (<b>security OF the cloud</b>). You lock your own flat, decide who gets keys, and don't leave valuables in the hallway (<b>security IN the cloud</b>: IAM, data, OS patches on EC2, firewall rules). The more managed the service, the more the landlord handles (S3 and Lambda shift more to AWS than EC2).</div>
+<figure>
+<svg viewBox="0 0 700 170" role="img" aria-label="Shared responsibility model">
+<rect class="a" x="10" y="20" width="330" height="130" rx="10"/><text x="25" y="45" font-size="14" font-weight="700">AWS: security OF the cloud</text><text x="25" y="70" font-size="12">Data centres and hardware</text><text x="25" y="90" font-size="12">Network and hypervisor</text><text x="25" y="110" font-size="12">Managed service software</text>
+<rect class="c" x="360" y="20" width="330" height="130" rx="10"/><text x="375" y="45" font-size="14" font-weight="700">You: security IN the cloud</text><text x="375" y="70" font-size="12">IAM users, MFA, permissions</text><text x="375" y="90" font-size="12">Your data and encryption choices</text><text x="375" y="110" font-size="12">Guest OS patches, security groups</text>
+</svg><figcaption>Exam favourite: patching an EC2 operating system is YOUR job; patching the hypervisor is AWS's.</figcaption></figure>
+
+<h2>3. Lab</h2>
+<h3>Part A: CloudTrail, the CCTV</h3>
+<ol class="steps">
+<li>CloudTrail → <b>Event history</b> (on by default, 90 days, free). Filter <b>Event name = RunInstances</b> or <b>ConsoleLogin</b>. You'll see your own actions from earlier days: user, time, source IP.</li>
+<li>Open one event and read the JSON. Find <code>userIdentity</code> and <code>sourceIPAddress</code>. This is how investigations start.</li>
+<li>Optional: create a <b>trail</b> that stores logs in S3 for longer than 90 days (first management trail is free; the S3 storage isn't).</li>
+</ol>
+<h3>Part B: KMS, your own encryption key</h3>
+<ol class="steps">
+<li>KMS → Customer managed keys → <b>Create key</b>: symmetric, encrypt and decrypt, alias <code>lab-key</code>. Customer-managed keys cost ~USD 1/month (prorated), and you'll schedule deletion at the end.</li>
+<li>Encrypt a file with the CLI:
+<pre><code>echo "my secret plan" &gt; plan.txt
+aws kms encrypt --key-id alias/lab-key \
+  --plaintext fileb://plan.txt --query CiphertextBlob \
+  --output text --profile lab | base64 --decode &gt; plan.enc
+aws kms decrypt --ciphertext-blob fileb://plan.enc \
+  --query Plaintext --output text --profile lab | base64 --decode</code></pre>
+It prints your text back. Anyone without permission on the key cannot decrypt, even if they steal <code>plan.enc</code>.</li>
+<li>Show the idea in S3: bucket → Properties → Default encryption → <b>SSE-KMS</b> with <code>lab-key</code>. Every upload is now encrypted with your key, and CloudTrail records every use of it.</li>
+</ol>
+<h3>Part C: Secrets Manager</h3>
+<ol class="steps">
+<li>Secrets Manager → Store a new secret → Other type → key <code>password</code> value <code>S3cr3t!</code> → name <code>lab/db-password</code> (about USD 0.40/month).</li>
+<li>Read it from the CLI:
+<pre><code>aws secretsmanager get-secret-value --secret-id lab/db-password \
+  --query SecretString --output text --profile lab</code></pre>
+Your code fetches the secret at runtime instead of hard-coding it in a file or GitHub repo. Rotation can be automatic for RDS.</li>
+</ol>
+<h3>Part D: look, don't touch</h3>
+<ol class="steps">
+<li>Open <b>GuardDuty</b> (30-day free trial; enable only if you want) and <b>Trusted Advisor</b> (Basic checks free). Read the finding categories: you'll recognise "exposed access keys" and "open security groups" from earlier days.</li>
+<li><b>Cleanup:</b> KMS → select <code>lab-key</code> → Key actions → <b>Schedule key deletion</b> (minimum 7 days). Delete the secret (it has a recovery window too). Disable GuardDuty if you enabled it. <b>Delete plan.txt and plan.enc locally; never commit them.</b></li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day12-cloudtrail-event.png</code> (blur account ID and IP).</div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>CloudTrail = <b>who did what</b> (API audit). CloudWatch = <b>how is it performing</b> (metrics, logs, alarms). Config = <b>how did it change</b>.</li>
+<li>GuardDuty = threat detection from logs. Inspector = software vulnerabilities. Macie = sensitive data in S3. Shield = DDoS. WAF = web app firewall (layer 7).</li>
+<li>KMS = manage encryption keys. Secrets Manager = rotate and retrieve secrets. Artifact = download AWS compliance reports.</li>
+<li>Encryption <b>at rest</b> (stored data) vs <b>in transit</b> (TLS/HTTPS).</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>Q1. Who deleted that security group last night?</summary>CloudTrail.</details>
+<details><summary>Q2. Detect compromised instances and unusual API activity automatically?</summary>GuardDuty.</details>
+<details><summary>Q3. Find PII like names and card numbers in S3?</summary>Amazon Macie.</details>
+<details><summary>Q4. Block SQL injection against a website?</summary>AWS WAF (on CloudFront or ALB).</details>
+<details><summary>Q5. Who patches the guest OS of an EC2 instance?</summary>The customer.</details>
+<details><summary>Q6. Where should an app get its database password?</summary>Secrets Manager (or Parameter Store), not source code.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Found my own actions in CloudTrail</label></li>
+<li><label><input type="checkbox" data-id="b"> Encrypted and decrypted with KMS</label></li>
+<li><label><input type="checkbox" data-id="c"> Retrieved a secret via CLI</label></li>
+<li><label><input type="checkbox" data-id="d"> Scheduled key deletion, removed the secret and local files</label></li>
+</ul>
+<nav class="pn"><a href="day11.html">← Day 11: CloudFront: A Global CDN with HTTPS</a><a href="day13.html">Day 13: Weekend Project: Secure Two-Tier Network →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>
