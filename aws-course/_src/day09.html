@@ -1,0 +1,79 @@
+<!--meta {"n":9,"title":"Private Subnets, NAT, Security Groups and NACLs","time":"2–4h","week":2,"tag":"Networking · Security · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Design the classic web-app layout (public front door, private back rooms), explain why private servers still reach the internet through NAT, and tell Security Groups from Network ACLs, which is one of the most-tested comparisons in both exams.</div>
+
+<h2>1. First principles: not everything should face the street</h2>
+<p>A web server must be reachable. A database must <b>not</b> be. If both sit in public subnets, a single mistake exposes your data. The fix is old as banks: <b>a public lobby, a private vault</b>.</p>
+<div class="box analogy"><b class="t">Analogy: a restaurant</b>
+Customers (internet) meet the waiter in the dining room (public subnet). The kitchen and the safe (private subnet) have no street door. The kitchen still needs deliveries (OS updates), so a <b>NAT gateway</b> acts like a runner who goes out on the kitchen's behalf and brings the parcel back. Strangers can't use the runner to walk <i>in</i>.</div>
+
+<h2>2. NAT: outbound yes, inbound no</h2>
+<p>A <b>NAT gateway</b> sits in a <b>public</b> subnet with an Elastic IP. The private subnet's route table says <code>0.0.0.0/0 → nat-xxxx</code>. Private instances can start connections out (updates, API calls); the internet cannot start connections in.</p>
+<figure>
+<svg viewBox="0 0 700 300" role="img" aria-label="Public subnet with NAT gateway and web server, private subnet with database, internet gateway">
+<rect class="c" x="10" y="10" width="560" height="280" rx="12"/><text x="22" y="30" font-size="13" font-weight="700">lab-vpc 10.0.0.0/16</text>
+<rect class="a" x="30" y="50" width="520" height="95" rx="10"/><text x="42" y="70" font-size="13" font-weight="700">Public subnet 10.0.1.0/24 · route 0.0.0.0/0 → IGW</text>
+<rect class="b" x="50" y="85" width="150" height="46" rx="6"/><text x="64" y="112" font-size="13">Web server</text>
+<rect class="b" x="260" y="85" width="150" height="46" rx="6"/><text x="276" y="112" font-size="13">NAT gateway</text>
+<rect class="b" x="30" y="165" width="520" height="105" rx="10"/><text x="42" y="185" font-size="13" font-weight="700">Private subnet 10.0.11.0/24 · route 0.0.0.0/0 → NAT</text>
+<rect class="b" x="50" y="205" width="150" height="46" rx="6"/><text x="64" y="232" font-size="13">App / DB server</text>
+<path class="l" d="M200 228 H330 V131"/><text x="342" y="226" font-size="11" class="m">updates go out via NAT</text>
+<path class="l" d="M125 131 V205"/><text x="134" y="159" font-size="11" class="m">web → app (local)</text>
+<rect class="a" x="600" y="85" width="90" height="46" rx="10"/><text x="612" y="112" font-size="13" font-weight="700">Internet</text>
+<path class="l" d="M570 108 H600"/>
+</svg><figcaption>Private servers have no public IP. Only the NAT gateway and the web tier touch the internet.</figcaption></figure>
+<div class="box warn"><b class="t">NAT gateway is NOT free</b>About USD 0.045 per hour (≈ USD 32/month) plus data charges. For a lab, create it, test it, <b>delete it the same day</b>, and release the Elastic IP.</div>
+
+<h2>3. Security Groups vs Network ACLs</h2>
+<table><tr><th></th><th>Security Group</th><th>Network ACL (NACL)</th></tr>
+<tr><td>Protects</td><td>An instance (its network interface)</td><td>A whole subnet</td></tr>
+<tr><td>State</td><td><b>Stateful</b>: reply traffic is automatically allowed</td><td><b>Stateless</b>: you must allow the return traffic yourself</td></tr>
+<tr><td>Rules</td><td><b>Allow</b> only</td><td><b>Allow and Deny</b></td></tr>
+<tr><td>Evaluation</td><td>All rules together</td><td>Numbered, lowest first, first match wins</td></tr>
+<tr><td>Default</td><td>Deny all inbound, allow all outbound</td><td>Default NACL allows everything</td></tr></table>
+<div class="box analogy"><b class="t">Analogy: building security</b>
+The NACL is the guard at the estate street entrance with a written list (can say "this person is banned"). The security group is the bouncer at each apartment door who remembers you went out, so lets you back in (stateful). Use SGs for day-to-day; use NACLs for blunt rules like blocking one hostile IP.</div>
+<p><b>Pro move:</b> security groups can reference <b>other security groups</b> as the source. Rule: "database accepts port 3306 only from <code>web-sg</code>". No IP addresses to maintain.</p>
+
+<h2>4. Lab: front door + back room (≈ 2 h)</h2>
+<ol class="steps">
+<li>In <code>lab-vpc</code> create a <b>private subnet</b> <code>lab-private-a</code> (AZ a, <code>10.0.11.0/24</code>). Do <b>not</b> enable auto-assign public IP.</li>
+<li>Create a new route table <code>lab-private-rt</code> (no internet route yet) and associate it with <code>lab-private-a</code>. Notice it only has the <code>local</code> route.</li>
+<li>Create <code>lab-app-sg</code>: inbound <b>HTTP 80</b> with source = <b><code>lab-web-sg</code></b> (pick the SG, not an IP). No SSH.</li>
+<li><b>IAM role for no-key access:</b> IAM → Roles → Create → EC2 → attach <code>AmazonSSMManagedInstanceCore</code> → name <code>lab-ssm-role</code>. This lets you open a shell from the console (Session Manager), so the private server needs <b>no SSH port and no key</b>.</li>
+<li>Launch <code>lab-private-server</code> in <code>lab-private-a</code>, SG <code>lab-app-sg</code>, no public IP, instance profile <code>lab-ssm-role</code>. Also relaunch your <code>lab-web</code> public instance from Day 8 (same settings as before).</li>
+<li><b>Prove it is isolated:</b> try Systems Manager → Session Manager → Start session on the private server. It won't appear yet: it has no path to the SSM service. That is the point of the next step.</li>
+<li><b>Create the NAT gateway:</b> VPC → NAT gateways → Create, subnet <b><code>lab-public-a</code></b> (it must live in a public subnet), connectivity Public, <b>Allocate Elastic IP</b>. Wait for "Available".</li>
+<li>Edit <code>lab-private-rt</code>: add <code>0.0.0.0/0 → NAT gateway</code>. Wait ~2 minutes, then connect with Session Manager (or reboot the instance if it still doesn't show).</li>
+<li>In that shell run:
+<pre><code>curl -s https://checkip.amazonaws.com    # shows the NAT gateway's Elastic IP, not a server IP
+sudo dnf install -y nginx &amp;&amp; echo private-ok | sudo tee /usr/share/nginx/html/index.html &amp;&amp; sudo systemctl start nginx</code></pre></li>
+<li>From the <b>public</b> web instance (SSH or Session Manager) run <code>curl http://PRIVATE-IP</code>. It works because <code>lab-app-sg</code> trusts <code>lab-web-sg</code>. From your laptop's browser the same private IP is unreachable. 🎯</li>
+<li><b>Stretch (NACL):</b> in the default NACL of the VPC add a <b>Deny</b> rule #90 for inbound TCP 80 from your own IP and watch your public page stop loading. Delete the rule to restore.</li>
+<li><b>CLEANUP, do it now:</b> terminate both instances, <b>delete the NAT gateway</b>, wait until Deleted, then <b>Release the Elastic IP</b> (VPC → Elastic IPs). Billing → check no NAT is listed.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day09-checkip-nat.png</code>, <code>evidence/day09-private-curl.png</code>, <code>evidence/day09-cleanup-eip-released.png</code></div>
+
+<h2>5. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Private instance needs internet for updates → <b>NAT gateway</b> in a public subnet, route from the private subnet.</li>
+<li>NAT gateway = managed, per-AZ, hourly cost. Put one per AZ for resilience.</li>
+<li>Security group = stateful, allow-only, instance level. NACL = stateless, allow+deny, subnet level.</li>
+<li>To block one malicious IP address, use a <b>NACL deny rule</b> (security groups can't deny).</li>
+<li>Reach AWS services without internet or NAT: <b>VPC endpoints</b> (Gateway endpoints for S3 and DynamoDB are free).</li></ul></div>
+
+<h2>6. Quiz</h2>
+<details><summary>Q1. A private EC2 needs to download patches but must not be reachable from the internet. Solution?</summary>NAT gateway in a public subnet + route 0.0.0.0/0 → NAT in the private route table.</details>
+<details><summary>Q2. Which firewall is stateless?</summary>Network ACL.</details>
+<details><summary>Q3. You must block traffic from one abusive IP at the subnet. Which tool?</summary>A NACL deny rule.</details>
+<details><summary>Q4. Where does a NAT gateway live?</summary>In a public subnet (with an Elastic IP).</details>
+<details><summary>Q5. Database should accept connections only from web servers. Best practice?</summary>Security group rule whose source is the web tier's security group.</details>
+<details><summary>Q6. How can an instance in a private subnet reach S3 privately and for free?</summary>S3 gateway VPC endpoint.</details>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Private server reachable from web tier only</label></li>
+<li><label><input type="checkbox" data-id="b"> Saw NAT's IP with checkip</label></li>
+<li><label><input type="checkbox" data-id="c"> NAT gateway deleted AND Elastic IP released</label></li>
+<li><label><input type="checkbox" data-id="d"> Can explain SG vs NACL in 30 seconds</label></li>
+</ul>

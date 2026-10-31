@@ -1,0 +1,91 @@
+<!--meta {"n":8,"title":"VPC: Your Private Network in the Cloud","time":"3–4h","week":2,"tag":"Networking · Weekend lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain what a VPC, subnet, route table and internet gateway are, read a CIDR block like <code>10.0.0.0/16</code>, and build a custom network from scratch that serves a web page to the internet.</div>
+
+<h2>1. First principles: why does a "private network" exist?</h2>
+<p>On Day 5 you launched a server and it "just worked" because AWS put it in a ready-made <b>default VPC</b>. Behind the scenes, someone had to answer: <i>which servers can talk to each other? Which can be reached from the internet? Where do packets go next?</i> A <b>VPC (Virtual Private Cloud)</b> is your own isolated network inside a Region where <b>you</b> answer those questions.</p>
+<div class="box analogy"><b class="t">Analogy: a gated estate</b>
+The VPC is the whole estate with a wall around it. <b>Subnets</b> are streets inside it. The <b>internet gateway</b> is the main gate to the public road. A <b>route table</b> is the signpost at the end of each street ("to leave the estate, go through the main gate"). A street with no sign to the gate is a private street: residents can visit each other but strangers can't drive in.</div>
+
+<h2>2. The five building blocks</h2>
+<table><tr><th>Piece</th><th>What it is</th><th>Scope</th></tr>
+<tr><td><b>VPC</b></td><td>Your network, defined by an IP range (CIDR)</td><td>One Region</td></tr>
+<tr><td><b>Subnet</b></td><td>A slice of the VPC's range, placed in <b>one AZ</b></td><td>One AZ</td></tr>
+<tr><td><b>Route table</b></td><td>Rules: "traffic for X goes to Y"</td><td>Attached to subnets</td></tr>
+<tr><td><b>Internet gateway (IGW)</b></td><td>Door between the VPC and the internet</td><td>Attached to a VPC</td></tr>
+<tr><td><b>Security group</b></td><td>Firewall around an instance (tomorrow: more)</td><td>Instance level</td></tr></table>
+<div class="box exam"><b class="t">The one definition the exam loves</b>
+A <b>public subnet</b> is simply a subnet whose route table has a route <code>0.0.0.0/0 → internet gateway</code>. A <b>private subnet</b> has no such route. The word "public" is not a checkbox, it is a route.</div>
+
+<h3>CIDR in 3 minutes (no maths degree needed)</h3>
+<p>An IPv4 address is 32 bits. <code>10.0.0.0/16</code> means "the first 16 bits are fixed, the remaining 16 are free for hosts" so you get 2<sup>16</sup> = 65,536 addresses. The bigger the number after the slash, the <b>smaller</b> the network.</p>
+<table><tr><th>CIDR</th><th>Addresses</th><th>Typical use</th></tr>
+<tr><td><code>10.0.0.0/16</code></td><td>65,536</td><td>Whole VPC (largest AWS allows)</td></tr>
+<tr><td><code>10.0.1.0/24</code></td><td>256</td><td>One subnet</td></tr>
+<tr><td><code>10.0.1.0/28</code></td><td>16</td><td>Smallest subnet AWS allows</td></tr></table>
+<p><b>Gotcha:</b> AWS reserves <b>5 addresses</b> in every subnet (network, router, DNS, future use, broadcast), so a /24 gives you 251 usable. Use private ranges only: <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>. And never let two networks you may connect later overlap.</p>
+
+<figure>
+<svg viewBox="0 0 700 330" role="img" aria-label="A VPC with two public subnets in two AZs, a route table and an internet gateway">
+<text x="10" y="20" font-weight="700" font-size="14">VPC 10.0.0.0/16 (Region eu-west-1)</text>
+<rect class="c" x="10" y="30" width="520" height="285" rx="12"/>
+<rect class="a" x="30" y="60" width="230" height="170" rx="10"/><text x="44" y="82" font-size="13" font-weight="700">AZ a · public subnet 10.0.1.0/24</text>
+<rect class="a" x="280" y="60" width="230" height="170" rx="10"/><text x="294" y="82" font-size="13" font-weight="700">AZ b · public subnet 10.0.2.0/24</text>
+<rect class="b" x="60" y="110" width="170" height="44" rx="6"/><text x="76" y="130" font-size="13">EC2 web server</text><text x="76" y="146" font-size="11" class="m">10.0.1.25 + public IP</text>
+<rect class="b" x="310" y="110" width="170" height="44" rx="6"/><text x="326" y="130" font-size="13">EC2 (later: 2nd server)</text><text x="326" y="146" font-size="11" class="m">10.0.2.30</text>
+<rect class="b" x="30" y="250" width="480" height="48" rx="6"/><text x="44" y="271" font-size="13" font-weight="700">Route table</text>
+<text x="44" y="288" font-size="12">10.0.0.0/16 → local   |   0.0.0.0/0 → igw-xxxx</text>
+<rect class="a" x="590" y="130" width="100" height="60" rx="10"/><text x="602" y="157" font-size="13" font-weight="700">Internet</text><text x="602" y="175" font-size="11" class="m">gateway</text>
+<path class="l" d="M530 160 H590"/><path class="l" d="M690 160 H700" />
+<text x="540" y="150" font-size="11" class="m">door</text>
+</svg><figcaption>Two subnets in two AZs (resilience) share one route table that sends "everything else" to the internet gateway.</figcaption></figure>
+
+<h2>3. Default VPC vs custom VPC</h2>
+<p>Every Region has a default VPC (<code>172.31.0.0/16</code>, one public subnet per AZ) so beginners can launch instantly. Real companies build <b>custom VPCs</b> so they control ranges, privacy and layout. Today you build one by hand because doing it once is how the concepts stick.</p>
+
+<h2>4. Lab: build a VPC by hand and serve a web page (≈ 90 min)</h2>
+<div class="box warn"><b class="t">Cost safety</b>VPC, subnets, route tables and IGW are free. Since 2024 AWS charges for <b>every public IPv4 address</b> (about USD 0.005/hour, roughly USD 3.60/month), so a t2/t3.micro with a public IP costs a little even on the free plan. Do the cleanup at the end.</div>
+<ol class="steps">
+<li><b>Pick your Region</b> (top right of the console) and stay in it all day.</li>
+<li><b>VPC → Create VPC → "VPC only".</b> Name <code>lab-vpc</code>, IPv4 CIDR <code>10.0.0.0/16</code>. Create. Then Actions → <b>Edit VPC settings</b> → tick <b>Enable DNS hostnames</b>.</li>
+<li><b>Subnets → Create subnet.</b> VPC <code>lab-vpc</code>. Add two: <code>lab-public-a</code> (AZ a, <code>10.0.1.0/24</code>) and <code>lab-public-b</code> (AZ b, <code>10.0.2.0/24</code>). For each: Actions → Edit subnet settings → <b>Enable auto-assign public IPv4 address</b>.</li>
+<li><b>Internet gateways → Create</b> <code>lab-igw</code> → Actions → <b>Attach to VPC</b> → <code>lab-vpc</code>. (It is not connected until attached. A classic mistake.)</li>
+<li><b>Route tables → Create</b> <code>lab-public-rt</code> in <code>lab-vpc</code>. Open it → Routes → Edit → add <code>0.0.0.0/0</code> → target <b>Internet Gateway</b> → <code>lab-igw</code>. Then Subnet associations → attach both public subnets.</li>
+<li><b>Security group:</b> EC2 → Security groups → Create <code>lab-web-sg</code> in <code>lab-vpc</code>. Inbound: HTTP (80) from Anywhere-IPv4, and SSH (22) from <b>My IP</b> only. Never open 22 to the world.</li>
+<li><b>Launch an instance:</b> Amazon Linux 2023, t3.micro (or free-tier eligible type), network <code>lab-vpc</code>, subnet <code>lab-public-a</code>, security group <code>lab-web-sg</code>. Under Advanced → <b>User data</b> paste:
+<pre><code>#!/bin/bash
+dnf install -y nginx
+echo "&lt;h1&gt;Hello from my own VPC&lt;/h1&gt;&lt;p&gt;AZ: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)&lt;/p&gt;" &gt; /usr/share/nginx/html/index.html
+systemctl enable --now nginx</code></pre>
+(Your <code>nginx-lab</code> from the Linux phase, now in the cloud.)</li>
+<li>Wait 2 minutes, copy the instance's <b>Public IPv4 address</b>, open <code>http://THAT-IP</code> in a browser. You should see your page.</li>
+<li><b>Break it on purpose (this is where learning happens):</b> remove the <code>0.0.0.0/0</code> route and refresh. The page dies. Add it back. Now remove port 80 from the security group instead. Different failure, same symptom. Learn to tell which layer broke: <b>route</b> or <b>firewall</b>.</li>
+<li><b>Cleanup (leave the VPC for tomorrow):</b> terminate the instance now. Keep the VPC, subnets, IGW and route table: they cost nothing.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day08-vpc-resource-map.png</code> (VPC → your VPC → Resource map tab) and <code>evidence/day08-hello-page.png</code></div>
+
+<h2>5. Troubleshooting ladder (use this forever)</h2>
+<ol><li>Does the instance have a public IP?</li><li>Is the IGW <b>attached</b>?</li><li>Does the subnet's route table have <code>0.0.0.0/0 → igw</code>?</li><li>Does the security group allow the port?</li><li>Is the app actually running (<code>systemctl status nginx</code>)?</li></ol>
+
+<h2>6. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>A VPC spans all AZs of one Region; a subnet lives in exactly one AZ.</li>
+<li>Public subnet = route to an IGW. An instance also needs a public (or Elastic) IP to be reachable.</li>
+<li>One IGW per VPC; it is highly available and managed by AWS.</li>
+<li>5 reserved IPs per subnet; VPC CIDR between /16 and /28.</li>
+<li>Default VPC exists in every Region and has public subnets.</li></ul></div>
+
+<h2>7. Quiz</h2>
+<details><summary>Q1. What makes a subnet "public"?</summary>Its route table sends 0.0.0.0/0 to an internet gateway.</details>
+<details><summary>Q2. How many usable IPs in a /24 subnet in AWS?</summary>251 (256 minus 5 reserved).</details>
+<details><summary>Q3. Instance has a public IP, IGW attached, security group open on 80, still unreachable. Likely cause?</summary>The subnet's route table lacks the 0.0.0.0/0 → IGW route.</details>
+<details><summary>Q4. A subnet can span two AZs. True or false?</summary>False. One subnet, one AZ.</details>
+<details><summary>Q5. Which is regional: VPC or subnet?</summary>VPC is regional; subnet is per-AZ.</details>
+
+<h2>8. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Built lab-vpc with two public subnets</label></li>
+<li><label><input type="checkbox" data-id="b"> Saw my own page in the browser</label></li>
+<li><label><input type="checkbox" data-id="c"> Broke and fixed the route and the security group</label></li>
+<li><label><input type="checkbox" data-id="d"> Terminated the instance, screenshots saved in evidence/</label></li>
+</ul>

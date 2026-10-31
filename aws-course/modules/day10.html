@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 10 - DNS and Route 53</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day10">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 10</span><span class="badge">Concepts · Lab</span><span class="badge">⏱ 1.5h</span></p><h1>DNS and Route 53</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain how a name like <code>shop.example.com</code> becomes an IP address, name the main Route 53 record types and routing policies, and create a private DNS name for your own servers.</div>
+
+<h2>1. First principles: computers want numbers, humans want names</h2>
+<p>Networks route by IP address. Nobody remembers <code>52.17.4.9</code>, so we use a phone book that maps names to numbers: <b>DNS (Domain Name System)</b>. <b>Route 53</b> is AWS's DNS service (named after TCP/UDP port 53) and it is <b>global</b>, with a 100% availability SLA.</p>
+<div class="box analogy"><b class="t">Analogy: the phone book and the receptionist</b>
+You ask the receptionist (your ISP's resolver) "call Pizza Place". She doesn't know, so she asks the head directory (root), who says "ask the .com office" (TLD), who says "ask Pizza Place's own directory" (authoritative name server, which is Route 53 if you host the zone there). She remembers the answer for a while (caching, controlled by <b>TTL</b>).</div>
+<figure>
+<svg viewBox="0 0 700 200" role="img" aria-label="DNS lookup steps">
+<g font-size="13"><rect class="b" x="10" y="70" width="110" height="50" rx="8"/><text x="26" y="100">Your browser</text>
+<rect class="a" x="170" y="70" width="120" height="50" rx="8"/><text x="182" y="92">Resolver</text><text x="182" y="108" font-size="11" class="m">(ISP / 8.8.8.8)</text>
+<rect class="b" x="340" y="10" width="110" height="40" rx="8"/><text x="366" y="35">Root</text>
+<rect class="b" x="340" y="80" width="110" height="40" rx="8"/><text x="372" y="105">.com</text>
+<rect class="a" x="340" y="150" width="130" height="40" rx="8"/><text x="352" y="175">Route 53 zone</text>
+<rect class="b" x="540" y="70" width="140" height="50" rx="8"/><text x="552" y="92">Web server</text><text x="552" y="108" font-size="11" class="m">52.17.4.9</text></g>
+<path class="l" d="M120 95 H170"/><path class="l" d="M290 85 L340 30"/><path class="l" d="M290 100 H340"/><path class="l" d="M290 112 L340 165"/><path class="l" d="M470 170 Q520 140 540 110"/>
+<text x="10" y="150" font-size="12" class="m">1. ask  2. root → .com → Route 53  3. get IP  4. connect</text>
+</svg><figcaption>The resolver walks the hierarchy once, then caches the answer for the TTL.</figcaption></figure>
+
+<h2>2. Record types you must know</h2>
+<table><tr><th>Type</th><th>Maps</th><th>Example</th></tr>
+<tr><td><b>A</b></td><td>name → IPv4</td><td><code>app.example.com → 52.17.4.9</code></td></tr>
+<tr><td><b>AAAA</b></td><td>name → IPv6</td><td></td></tr>
+<tr><td><b>CNAME</b></td><td>name → another name (not allowed at the root/apex)</td><td><code>www → app.example.com</code></td></tr>
+<tr><td><b>Alias</b> (Route 53 only)</td><td>name → AWS resource (CloudFront, ELB, S3 site). Works at the apex, free queries</td><td><code>example.com → d123.cloudfront.net</code></td></tr>
+<tr><td><b>MX</b></td><td>mail servers</td><td></td></tr>
+<tr><td><b>TXT</b></td><td>text (domain verification, SPF)</td><td></td></tr></table>
+
+<h2>3. Routing policies: DNS as a traffic cop</h2>
+<table><tr><th>Policy</th><th>Use it when…</th></tr>
+<tr><td>Simple</td><td>One answer.</td></tr>
+<tr><td>Weighted</td><td>Send 10% of users to a new version (canary release).</td></tr>
+<tr><td>Latency</td><td>Send each user to the Region with the lowest latency.</td></tr>
+<tr><td>Failover</td><td>Primary/standby; health check flips traffic if primary dies.</td></tr>
+<tr><td>Geolocation</td><td>Rules by user country (language, licensing, law).</td></tr>
+<tr><td>Multivalue</td><td>Return several healthy IPs (poor man's load balancing).</td></tr></table>
+
+<h2>4. Lab: your own private DNS names (≈ 45 min, about USD 0.50/month, delete after)</h2>
+<p>You don't need to buy a domain. A <b>private hosted zone</b> works only inside your VPC, which is exactly how real companies name internal servers (<code>db.internal</code> instead of <code>10.0.11.37</code>).</p>
+<ol class="steps">
+<li>Make sure <code>lab-vpc</code> has <b>Enable DNS hostnames</b> and <b>Enable DNS resolution</b> ticked (VPC → Actions → Edit VPC settings).</li>
+<li>Route 53 → Hosted zones → <b>Create hosted zone</b>: name <code>lab.internal</code>, type <b>Private hosted zone</b>, associate with your Region and <code>lab-vpc</code>.</li>
+<li>Launch one instance in <code>lab-public-a</code> (use the Day 8 settings, with nginx user data) and note its <b>private IP</b>.</li>
+<li>In the zone: <b>Create record</b> → name <code>web</code>, type <b>A</b>, value = that private IP, TTL 60.</li>
+<li>Connect to a second instance in the VPC (or the same one) and test:
+<pre><code>nslookup web.lab.internal
+curl http://web.lab.internal</code></pre>
+You now reach a server by name. Change the record to a different IP and watch the change after 60 seconds.</li>
+<li><b>Optional with a real domain:</b> if you own one, create a public hosted zone, point your registrar's nameservers to the 4 NS values Route 53 gives you, and add an A record to your web instance. DNS changes can take minutes to hours to spread.</li>
+<li><b>Cleanup:</b> delete the record, delete the hosted zone, terminate the instance(s).</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day10-private-zone.png</code> and <code>evidence/day10-nslookup.png</code></div>
+
+<h2>5. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Route 53 = DNS + domain registration + health checks. Global service.</li>
+<li>Alias vs CNAME: Alias works at the zone apex and points to AWS resources; CNAME can't be used at the apex.</li>
+<li>TTL: low = faster changes but more queries; high = cached longer.</li>
+<li>Failover routing needs a <b>health check</b>. Latency routing = fastest Region, Geolocation = by country.</li></ul></div>
+
+<h2>6. Quiz</h2>
+<details><summary>Q1. You want example.com (apex) to point to a CloudFront distribution. Which record?</summary>Alias A record.</details>
+<details><summary>Q2. Send 5% of traffic to a new version. Policy?</summary>Weighted.</details>
+<details><summary>Q3. Users in Germany must see the German site. Policy?</summary>Geolocation.</details>
+<details><summary>Q4. Automatically switch to a standby site when the primary is unhealthy?</summary>Failover routing with a health check.</details>
+<details><summary>Q5. Name internal servers without exposing them publicly?</summary>Private hosted zone.</details>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Resolved a private name with nslookup</label></li>
+<li><label><input type="checkbox" data-id="b"> Can explain Alias vs CNAME</label></li>
+<li><label><input type="checkbox" data-id="c"> Hosted zone and instances deleted</label></li>
+</ul>
+<nav class="pn"><a href="day09.html">← Day 9: Private Subnets, NAT, Security Groups and NACLs</a><a href="../index.html">Course home →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>
