@@ -1,0 +1,97 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 8 - VPC: Your Private Network in the Cloud</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day8">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 8</span><span class="badge">Networking · Lab</span><span class="badge">⏱ 1.5–2h</span></p><h1>VPC: Your Private Network in the Cloud</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain what a VPC, subnet, route table, internet gateway and security group are, and build a custom VPC with a public subnet that serves a web page from an EC2 instance.</div>
+
+<h2>1. First principles: why does a VPC exist?</h2>
+<p>All customers share AWS's physical network. Without isolation your servers would sit next to strangers' servers. A <b>VPC (Virtual Private Cloud)</b> is a logically isolated network that only you control: you choose the IP range, carve it into pieces, and decide what can talk to what and to the internet.</p>
+<div class="box analogy"><b class="t">Analogy: an office building</b>
+The <b>VPC</b> is your building with a fence around it. <b>Subnets</b> are floors (public lobby floor, private back-office floor). The <b>Internet Gateway</b> is the front door to the street. <b>Route tables</b> are the signs saying "to reach the street, use the front door". <b>Security groups</b> are the guards at each office door checking who may enter. A <b>NAT gateway</b> is a mail room: back-office staff can send letters out and get replies, but strangers can't walk in.</div>
+
+<h2>2. The five building blocks</h2>
+<table><tr><th>Piece</th><th>What it does</th><th>Scope</th></tr>
+<tr><td>VPC</td><td>Your network, defined by a CIDR range e.g. <code>10.0.0.0/16</code> (65,536 addresses)</td><td>One Region</td></tr>
+<tr><td>Subnet</td><td>A slice of the VPC range, e.g. <code>10.0.1.0/24</code> (256 addresses; AWS reserves 5)</td><td>One AZ</td></tr>
+<tr><td>Route table</td><td>Rules: destination → target. A subnet is "public" only if its route table sends <code>0.0.0.0/0</code> to an Internet Gateway</td><td>Attached to subnets</td></tr>
+<tr><td>Internet Gateway (IGW)</td><td>Two-way door between VPC and internet</td><td>Attached to one VPC</td></tr>
+<tr><td>Security group (SG)</td><td>Stateful firewall on the instance. Allow rules only; replies are automatically allowed</td><td>VPC</td></tr></table>
+
+<figure>
+<svg viewBox="0 0 700 330" role="img" aria-label="VPC with public and private subnets, internet gateway and route table">
+<rect x="150" y="30" width="530" height="280" rx="10" fill="none" stroke="currentColor" stroke-width="2"/>
+<text x="162" y="52" font-weight="700" font-size="14">VPC 10.0.0.0/16 (Region)</text>
+<rect x="170" y="70" width="230" height="220" rx="8" class="c" fill-opacity=".18" stroke="currentColor"/>
+<text x="182" y="92" font-size="13" font-weight="700">Public subnet 10.0.1.0/24 (AZ-a)</text>
+<rect x="195" y="110" width="180" height="50" rx="6" class="a"/><text x="210" y="140" font-size="13" fill="#fff">EC2 web server</text>
+<text x="182" y="190" font-size="12">Route table:</text>
+<text x="182" y="208" font-size="12" font-family="monospace">10.0.0.0/16 → local</text>
+<text x="182" y="226" font-size="12" font-family="monospace">0.0.0.0/0   → IGW</text>
+<rect x="430" y="70" width="230" height="220" rx="8" class="b" fill-opacity=".18" stroke="currentColor"/>
+<text x="442" y="92" font-size="13" font-weight="700">Private subnet 10.0.2.0/24</text>
+<rect x="455" y="110" width="180" height="50" rx="6" class="b"/><text x="470" y="140" font-size="13" fill="#fff">Database (no public IP)</text>
+<text x="442" y="190" font-size="12">Route table:</text>
+<text x="442" y="208" font-size="12" font-family="monospace">10.0.0.0/16 → local</text>
+<text x="442" y="226" font-size="12" class="m">(no route to internet)</text>
+<rect x="20" y="130" width="100" height="60" rx="8" class="l" stroke="currentColor"/><text x="42" y="165" font-size="13" font-weight="700">Internet</text>
+<line x1="120" y1="160" x2="170" y2="160" stroke="currentColor" stroke-width="3"/>
+<text x="95" y="125" font-size="12" font-weight="700">IGW</text>
+</svg><figcaption>Public = route to the IGW. Private = no such route. Everything else is just addressing.</figcaption></figure>
+
+<h2>3. CIDR in 60 seconds</h2>
+<p><code>10.0.0.0/16</code>: the number after the slash is how many leading bits are fixed. <b>Smaller number = bigger network.</b> /16 → 65,536 addresses, /24 → 256, /28 → 16. Subnets inside the VPC must not overlap. Exam favourite: <i>"/16 is the largest VPC size allowed, /28 the smallest."</i></p>
+
+<h2>4. Lab: build a VPC by hand (~45 min)</h2>
+<div class="box warn"><b class="t">Cost safety</b>VPC, subnet, IGW and route tables are free. A t2/t3.micro instance is within free-plan usage. Do <b>not</b> create a NAT Gateway today: it bills hourly (~USD 0.045/h plus data).</div>
+<ol class="steps">
+<li>Console → VPC → <b>Create VPC</b> → "VPC only". Name <code>day8-vpc</code>, IPv4 CIDR <code>10.0.0.0/16</code>.</li>
+<li><b>Subnets → Create subnet</b>: VPC <code>day8-vpc</code>, name <code>public-a</code>, pick an AZ, CIDR <code>10.0.1.0/24</code>. Create a second one <code>private-a</code> with <code>10.0.2.0/24</code> in the same AZ.</li>
+<li>Select <code>public-a</code> → Actions → Edit subnet settings → tick <b>Enable auto-assign public IPv4 address</b>.</li>
+<li><b>Internet gateways → Create</b> <code>day8-igw</code> → Actions → <b>Attach to VPC</b> <code>day8-vpc</code>.</li>
+<li><b>Route tables → Create</b> <code>public-rt</code> in <code>day8-vpc</code>. Routes → Edit → add <code>0.0.0.0/0</code> target <b>Internet Gateway</b> <code>day8-igw</code>. Subnet associations → attach <code>public-a</code> only.</li>
+<li><b>Security groups → Create</b> <code>web-sg</code> in <code>day8-vpc</code>: inbound HTTP (80) from Anywhere, SSH (22) from <b>My IP</b>.</li>
+<li><b>EC2 → Launch instance</b>: Amazon Linux, t3.micro (free-plan eligible), Network <code>day8-vpc</code>, subnet <code>public-a</code>, security group <code>web-sg</code>. In Advanced → User data paste:
+<pre><code>#!/bin/bash
+dnf install -y nginx
+echo "&lt;h1&gt;Hello from my own VPC!&lt;/h1&gt;" &gt; /usr/share/nginx/html/index.html
+systemctl enable --now nginx</code></pre></li>
+<li>Copy the instance's public IPv4 into your browser (<code>http://…</code>). You should see your heading.</li>
+<li><b>Break it to learn it:</b> remove the <code>0.0.0.0/0 → IGW</code> route and reload. Page dies. Restore it. You've just proved what makes a subnet public.</li>
+<li><b>Cleanup:</b> terminate the instance → delete <code>web-sg</code> → detach and delete the IGW → delete the subnets → delete the VPC. (Deleting the VPC from the console can remove the dependents for you.)</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day08-vpc-resource-map.png</code> (VPC → resource map) and <code>evidence/day08-hello-page.png</code> (blur the public IP if you like)</div>
+
+<h2>5. Security group vs Network ACL</h2>
+<table><tr><th></th><th>Security group</th><th>Network ACL</th></tr>
+<tr><td>Level</td><td>Instance</td><td>Subnet</td></tr>
+<tr><td>State</td><td><b>Stateful</b> (replies auto-allowed)</td><td><b>Stateless</b> (must allow both directions)</td></tr>
+<tr><td>Rules</td><td>Allow only</td><td>Allow and Deny, evaluated in number order</td></tr></table>
+<div class="box analogy"><b class="t">Analogy</b>Security group = bouncer who remembers you went out for a smoke and lets you back in. NACL = a checkpoint at the floor entrance that checks your papers every single time, in both directions.</div>
+
+<h2>6. Public, private and NAT: when do you need what?</h2>
+<p>Web servers that must be reachable → public subnet. Databases and app servers → private subnet. If private instances need to <i>download</i> updates, place a <b>NAT Gateway</b> in a public subnet and route the private subnet's <code>0.0.0.0/0</code> to it. We will build this with load balancers in Week 5.</p>
+
+<h2>7. Quiz (10 min)</h2>
+<details><summary>1. What makes a subnet "public"?</summary>Its route table has a route to an Internet Gateway (and instances have public IPs).</details>
+<details><summary>2. Does a subnet span multiple AZs?</summary>No. One subnet = one AZ. A VPC spans all AZs in a Region.</details>
+<details><summary>3. Security groups are stateful or stateless?</summary>Stateful. NACLs are stateless.</details>
+<details><summary>4. Your private database must download patches without being reachable from the internet. Use?</summary>NAT Gateway in a public subnet.</details>
+<details><summary>5. How many addresses are in a /24, and how many are usable in AWS?</summary>256; AWS reserves 5, so 251.</details>
+<details><summary>6. Can a security group contain a Deny rule?</summary>No. Only NACLs can explicitly deny.</details>
+
+<h2>8. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Built the VPC and saw my web page</label></li>
+<li><label><input type="checkbox" data-id="b"> Broke and fixed the route to the IGW</label></li>
+<li><label><input type="checkbox" data-id="c"> Quiz ≥ 5/6</label></li>
+<li><label><input type="checkbox" data-id="d"> Deleted everything, no NAT gateway left behind</label></li>
+</ul>
+<nav class="pn"><a href="day07.html">← Day 7: EBS, Pricing Models and Week 1 Review</a><a href="../index.html">Course home →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>
