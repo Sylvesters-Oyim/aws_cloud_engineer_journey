@@ -19,12 +19,20 @@ Repo → Settings → Pages → Source: *Deploy from a branch* → Branch: `main
 | 5 | EC2: your first server | ⬜ |
 | 6 | S3 (weekend lab) | ⬜ |
 | 7 | EBS, pricing models, Week 1 review | ⬜ |
-| 8+ | Week 2: VPC, Route 53, CloudFront, security services | 🔜 next |
+| 8 | VPC 1: your private network and CIDR | ⬜ |
+| 9 | VPC 2: build a public subnet, serve a website | ⬜ |
+| 10 | Firewalls: security groups, NACLs, Session Manager | ⬜ |
+| 11 | Route 53 and CloudFront | ⬜ |
+| 12 | KMS and the security toolbox | ⬜ |
+| 13 | CloudWatch, CloudTrail, Config, Organizations (weekend lab) | ⬜ |
+| 14 | Billing, support, Well-Architected, Week 2 review + mini-project | ⬜ |
+| 15+ | Week 3: databases, storage deep dive, CLF-C02 practice test | 🔜 next |
 
 Mark ✅ as you finish each day, and put your own console screenshots in [`aws-course/evidence/`](aws-course/evidence).
 
 ## Milestones
 - [ ] Week 1 complete
+- [ ] Week 2 complete
 - [ ] Book CLF-C02 exam (end of week 4)
 - [ ] Pass CLF-C02
 - [ ] Pass SAA-C03

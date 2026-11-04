@@ -1,0 +1,77 @@
+<!--meta {"n":11,"title":"DNS and CDN: Route 53 and CloudFront","time":"2h","week":2,"tag":"Networking · Delivery · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain how a domain name becomes an IP address, pick the right Route 53 routing policy, and put a private S3 website behind CloudFront with HTTPS so it loads fast worldwide and is no longer publicly exposed.</div>
+
+<h2>1. First principles: names, and distance</h2>
+<p>Computers use numbers (<code>93.184.216.34</code>); humans use names (<code>example.com</code>). <b>DNS</b> is the phone book that translates one into the other. <b>Route 53</b> is AWS's DNS service (named for DNS's port, 53). It does three jobs: register domains, host DNS records, and <b>route traffic intelligently</b> (health checks, failover, geography).</p>
+<div class="box analogy"><b class="t">Analogy: phone book + traffic cop</b>Looking up <code>shop.example.com</code> is like asking directory enquiries for a number. Route 53 is a clever directory: "If the Nairobi shop is closed (health check failed), give out the Cape Town shop's number instead."</div>
+<table><tr><th>Record</th><th>Maps</th><th>Example</th></tr>
+<tr><td>A</td><td>name → IPv4 address</td><td>www → 203.0.113.9</td></tr>
+<tr><td>AAAA</td><td>name → IPv6 address</td><td></td></tr>
+<tr><td>CNAME</td><td>name → another name (not allowed at the root domain)</td><td>blog → mysite.example.net</td></tr>
+<tr><td>Alias (AWS-only)</td><td>name → AWS resource (CloudFront, ELB, S3 site); works at the root; free queries</td><td>example.com → d123.cloudfront.net</td></tr>
+<tr><td>MX / TXT / NS</td><td>mail / text verification / name servers</td><td></td></tr></table>
+<h3>Routing policies (exam favourite)</h3>
+<table><tr><th>Policy</th><th>Behaviour</th><th>Use</th></tr>
+<tr><td>Simple</td><td>One answer</td><td>Single server</td></tr>
+<tr><td>Weighted</td><td>Split by percentage (90/10)</td><td>Canary releases, A/B tests</td></tr>
+<tr><td>Latency</td><td>Lowest-latency Region</td><td>Global apps</td></tr>
+<tr><td>Failover</td><td>Primary → secondary if health check fails</td><td>Disaster recovery</td></tr>
+<tr><td>Geolocation</td><td>By user's country</td><td>Legal / language rules</td></tr>
+<tr><td>Geoproximity / Multivalue</td><td>By distance with bias / several healthy answers</td><td>Advanced</td></tr></table>
+
+<h2>2. CloudFront: bring the content to the user</h2>
+<p>If your S3 bucket is in Ireland, a user in Nairobi waits for light to cross the ocean on every request. <b>CloudFront</b> is a CDN (content delivery network): copies of your files are cached at 400+ <b>edge locations</b>, so most requests are answered from nearby. It also gives you HTTPS, DDoS absorption (with Shield Standard) and lets you keep the bucket <b>private</b>.</p>
+<div class="box analogy"><b class="t">Analogy: pizza scooters again</b>The <b>origin</b> (S3/your server) is the central kitchen. <b>Edge locations</b> are scooters parked in each neighbourhood with popular pizzas ready. First customer in a neighbourhood waits for the kitchen (cache miss); everyone after is served from the scooter (cache hit). <b>TTL</b> is how long the pizza stays warm before being replaced.</div>
+<figure>
+<svg viewBox="0 0 700 220" role="img" aria-label="User to edge location to S3 origin">
+<rect class="b" x="10" y="80" width="90" height="56" rx="10"/><text x="30" y="113" font-size="14">User</text>
+<rect class="a" x="190" y="60" width="150" height="96" rx="10"/><text x="212" y="90" font-weight="700" font-size="14">Edge location</text><text x="208" y="112" font-size="12" class="m">cache hit → reply</text><text x="208" y="130" font-size="12" class="m">cache miss → origin</text>
+<rect class="b" x="440" y="80" width="130" height="56" rx="10"/><text x="458" y="113" font-size="14">S3 (private)</text>
+<path class="l" d="M100 108 H190"/><path class="l" d="M340 108 H440"/>
+<text x="106" y="98" font-size="11" class="m">HTTPS</text><text x="352" y="98" font-size="11" class="m">OAC</text>
+<text x="190" y="190" font-size="12" class="m">OAC (Origin Access Control) = only CloudFront may read the bucket.</text>
+</svg><figcaption>The bucket has no public access; CloudFront holds the only key.</figcaption></figure>
+
+<h2>3. Lab: private S3 site behind CloudFront (75 min)</h2>
+<p>Reuse your Day 6 bucket idea, but this time <b>do not</b> turn on public access or static website hosting.</p>
+<ol class="steps">
+<li><b>Bucket:</b> S3 → Create bucket <code>yourname-cdn-lab-12345</code> (globally unique). Keep <b>Block all public access = ON</b>.</li>
+<li>Upload an <code>index.html</code> (any page; copy your nginx-lab one) and one image.</li>
+<li><b>CloudFront → Create distribution.</b> Origin domain: pick your bucket (the S3 REST endpoint, not the website one). Origin access: <b>Origin access control settings (recommended)</b> → create new OAC. Default root object: <code>index.html</code>. Security: you can skip WAF for now. Create.</li>
+<li>CloudFront shows a banner: <b>"Copy policy" → go update the bucket policy</b>. Open the bucket → Permissions → Bucket policy → paste it → Save. (It grants <code>cloudfront.amazonaws.com</code> read access, conditioned on your distribution.)</li>
+<li>Wait until the distribution Status is <i>Deployed</i> (3–10 minutes). Open <code>https://dXXXX.cloudfront.net</code> — your page loads over HTTPS.</li>
+<li><b>Prove it's private:</b> open the direct S3 object URL — you get <i>Access Denied</i>. Only CloudFront can read it.</li>
+<li><b>Watch the cache:</b>
+<pre><code>curl -sI https://dXXXX.cloudfront.net/index.html | grep -i -E "x-cache|age"
+# 1st: X-Cache: Miss from cloudfront     2nd: X-Cache: Hit from cloudfront</code></pre></li>
+<li><b>Invalidate:</b> edit and re-upload <code>index.html</code>; you may still see the old copy until TTL ends. Create an <b>invalidation</b> for <code>/*</code> to force refresh (first 1,000 paths a month are free).</li>
+<li><b>Route 53 (optional, only if you own a domain):</b> create a hosted zone (US$0.50/month), add an <b>Alias A</b> record to your distribution, and attach a free ACM certificate (must be requested in <code>us-east-1</code> for CloudFront). Skip this if you have no domain; understand the idea.</li>
+<li><b>Cleanup:</b> Disable then delete the distribution (disabling takes a few minutes), empty and delete the bucket, delete any hosted zone.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day11-cloudfront-https.png</code> and <code>evidence/day11-x-cache-hit.png</code></div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Route 53 = DNS + health checks + domain registration; <b>100% availability SLA</b>, global service.</li>
+<li>Alias records work at the zone apex (root domain) and for AWS resources; CNAMEs cannot.</li>
+<li>CloudFront = CDN for static and dynamic content; S3 stays private via OAC.</li>
+<li>Global Accelerator = fixed anycast IPs and AWS backbone for TCP/UDP apps (not caching).</li>
+<li>Caches reduce latency and origin load; Lambda@Edge / CloudFront Functions run code at the edge.</li>
+<li>ACM issues free public TLS certificates (CloudFront needs them in us-east-1).</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>1. Which Route 53 policy sends 10% of traffic to a new version?</summary>Weighted routing.</details>
+<details><summary>2. Which service reduces latency for global users by caching content near them?</summary>Amazon CloudFront.</details>
+<details><summary>3. Need <code>example.com</code> (root) to point to a CloudFront distribution. Record type?</summary>Alias (A) record. CNAME can't be used at the apex.</details>
+<details><summary>4. How do you let CloudFront read an S3 bucket but nobody else?</summary>Origin Access Control plus a bucket policy trusting the distribution.</details>
+<details><summary>5. Route to a standby Region if the primary is unhealthy?</summary>Failover routing with health checks.</details>
+<details><summary>6. What gives you static anycast IPs for a TCP game server?</summary>AWS Global Accelerator.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> HTTPS site served from CloudFront</label></li>
+<li><label><input type="checkbox" data-id="b"> Saw a cache Miss then Hit</label></li>
+<li><label><input type="checkbox" data-id="c"> Direct S3 URL is denied</label></li>
+<li><label><input type="checkbox" data-id="d"> Deleted distribution and bucket</label></li>
+</ul>

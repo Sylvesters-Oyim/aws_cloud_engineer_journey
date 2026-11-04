@@ -1,0 +1,84 @@
+<!--meta {"n":13,"title":"Watching and Governing: CloudWatch, CloudTrail, Config, Organizations (Weekend Lab)","time":"3–4h","week":2,"tag":"Operations · Governance · Big Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Tell CloudWatch, CloudTrail and Config apart, build an alarm that emails you when a server is overloaded, trace "who did what" in your account, and explain how companies govern hundreds of accounts with Organizations.</div>
+
+<h2>1. First principles: running something means watching it</h2>
+<p>Three different questions come up when something goes wrong, and AWS has one service for each:</p>
+<table><tr><th>Question</th><th>Service</th><th>Analogy (a building)</th></tr>
+<tr><td><b>How is it performing right now?</b> (CPU, errors, logs)</td><td><b>CloudWatch</b></td><td>The dashboard of sensors: temperature, power usage, alarm bell</td></tr>
+<tr><td><b>Who did what, and when?</b> (API calls)</td><td><b>CloudTrail</b></td><td>The CCTV and visitor logbook at reception</td></tr>
+<tr><td><b>What does it look like, and does it follow the rules?</b> (configuration history)</td><td><b>Config</b></td><td>Building inspector comparing the layout with the approved plan, keeping old snapshots</td></tr></table>
+<figure>
+<svg viewBox="0 0 700 210" role="img" aria-label="CloudWatch, CloudTrail, Config roles">
+<rect class="a" x="20" y="30" width="200" height="140" rx="12"/><text x="40" y="60" font-weight="700">CloudWatch</text><text x="40" y="86" font-size="13">Metrics · Logs · Alarms</text><text x="40" y="108" font-size="13">“CPU is 95%”</text><text x="40" y="150" font-size="12" class="m">Performance & health</text>
+<rect class="c" x="250" y="30" width="200" height="140" rx="12"/><text x="270" y="60" font-weight="700">CloudTrail</text><text x="270" y="86" font-size="13">API call history</text><text x="270" y="108" font-size="13">“Ann deleted a bucket”</text><text x="270" y="150" font-size="12" class="m">Audit & security</text>
+<rect class="b" x="480" y="30" width="200" height="140" rx="12"/><text x="500" y="60" font-weight="700">AWS Config</text><text x="500" y="86" font-size="13">Config over time + rules</text><text x="500" y="108" font-size="13">“Bucket became public”</text><text x="500" y="150" font-size="12" class="m">Compliance & drift</text>
+</svg><figcaption>Performance (CloudWatch), activity (CloudTrail), configuration (Config).</figcaption></figure>
+<h3>Key facts</h3>
+<ul>
+<li><b>CloudWatch</b> collects <i>metrics</i> (EC2 CPU every 5 min by default; 1 min with detailed monitoring). <b>Memory and disk usage are not collected by default</b>, you need the CloudWatch agent. <b>Alarms</b> trigger actions: notify via <b>SNS</b>, auto-scale, reboot. <b>Logs</b> store app output. <b>EventBridge</b> reacts to events ("when an instance stops, run this").</li>
+<li><b>CloudTrail</b> is on by default with 90 days of <i>Event history</i> (management events). For longer retention create a <b>trail</b> delivering to S3. Remember: it records <i>API calls</i>, whether from console, CLI or SDK.</li>
+<li><b>Config</b> records resource configuration changes and evaluates <b>rules</b> ("S3 buckets must not be public", "volumes must be encrypted").</li></ul>
+<h3>Governing many accounts</h3>
+<p><b>AWS Organizations</b> groups accounts in a tree of <i>organizational units</i>, gives <b>consolidated billing</b> (one bill, combined volume discounts) and lets you attach <b>Service Control Policies (SCPs)</b> that set the maximum permissions any account (even its admin) can have.</p>
+<div class="box analogy"><b class="t">Analogy: a school group</b>Organizations is the head office of a school chain. Each school (account) has its own principal (admin), but head office's rulebook (SCP) says "no school may ever set up a branch outside the country", whatever the principal wants. SCPs <i>limit</i>, they never <i>grant</i> by themselves. IAM still has to allow the action.</div>
+<table><tr><th>Also learn the names</th><th>Does</th></tr>
+<tr><td>Trusted Advisor</td><td>Checks for cost, performance, security, fault tolerance, service limits. (Full checks need Business/Enterprise support.)</td></tr>
+<tr><td>Health Dashboard</td><td>Alerts about AWS outages affecting <i>your</i> resources</td></tr>
+<tr><td>Systems Manager</td><td>Operate fleets: patching, Session Manager, Parameter Store</td></tr>
+<tr><td>Control Tower</td><td>Set up a secure multi-account "landing zone" quickly</td></tr>
+<tr><td>License Manager / Service Catalog</td><td>Track licences / approved product templates</td></tr></table>
+
+<h2>2. Lab A: alarm + email when a server is overloaded (60 min)</h2>
+<ol class="steps">
+<li><b>Create a notification topic:</b> SNS → Topics → Create <b>Standard</b> topic <code>lab-alerts</code> → Create subscription: Protocol <b>Email</b>, your email → open the confirmation email and click <b>Confirm subscription</b>.</li>
+<li><b>Launch a t3.micro</b> (any lab VPC or the default one) with Amazon Linux 2023 and an SSM role (Day 10) so you can use Session Manager.</li>
+<li><b>Create the alarm:</b> CloudWatch → Alarms → Create alarm → Select metric → EC2 → Per-Instance Metrics → your instance → <b>CPUUtilization</b>. Statistic Average, period 1 minute. Condition: <i>Greater than 60</i>; Datapoints to alarm <code>2 out of 2</code>. Next → Action: In alarm → select <code>lab-alerts</code>. Name <code>lab-high-cpu</code>.</li>
+<li><b>Cause the fire:</b> connect with Session Manager and run
+<pre><code>sudo dnf install -y stress-ng 2&gt;/dev/null || sudo dnf install -y stress
+stress-ng --cpu 2 --timeout 600s &amp;     # or:  yes &gt; /dev/null &amp;   (run twice)</code></pre></li>
+<li>Watch the alarm go <i>OK → In alarm</i> (3–6 min) and receive your email. Stop the load (<code>pkill stress-ng</code> or <code>pkill yes</code>); watch it return to OK.</li>
+<li>Bonus: add a second alarm that <b>reboots</b> the instance on <code>StatusCheckFailed_System</code> (alarm action → EC2 recover). This is how "self-healing" starts.</li></ol>
+
+<h2>3. Lab B: be your own detective with CloudTrail (30 min)</h2>
+<ol class="steps">
+<li>CloudTrail → <b>Event history</b>. Filter <i>Event name = RunInstances</i>. Open your launch above: see <code>userIdentity</code>, <code>sourceIPAddress</code>, <code>userAgent</code> (console vs CLI) and the parameters. Anyone in your account doing anything leaves such a record.</li>
+<li>Filter by <i>User name = root</i>. If you see root activity other than setup, ask yourself why.</li>
+<li>Create a <b>trail</b> (<code>lab-trail</code>, all Regions, new S3 bucket). The first copy of management events is free but S3 storage costs pennies. After 10 minutes, find the JSON.gz logs in the bucket. This is the evidence an auditor wants.</li></ol>
+
+<h2>4. Lab C: AWS Config and a rule (30 min, optional but valuable)</h2>
+<ol class="steps">
+<li>Config → Get started → <i>Record all resources</i> (costs a little; stop recording afterwards).</li>
+<li>Add the managed rule <code>s3-bucket-public-read-prohibited</code> and <code>encrypted-volumes</code>. See which resources are <b>Non-compliant</b> (your old default-VPC volumes might be).</li></ol>
+
+<h2>5. Cleanup (important)</h2>
+<ul><li>Terminate the EC2 instance; delete the alarms and the SNS topic.</li>
+<li>CloudTrail: delete <code>lab-trail</code> and empty/delete its bucket (unless you want to keep one real trail; one is a good habit).</li>
+<li>Config: stop recording and delete the recorder/rules.</li></ul>
+<div class="shot">📸 Evidence: <code>evidence/day13-alarm-in-alarm.png</code>, <code>evidence/day13-alarm-email.png</code> (hide address) and <code>evidence/day13-cloudtrail-runinstances.png</code></div>
+
+<h2>6. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li><b>CloudWatch</b> = monitor; <b>CloudTrail</b> = audit API calls; <b>Config</b> = config history & compliance.</li>
+<li>EC2 basic monitoring 5 min; detailed 1 min. No memory metric by default.</li>
+<li>SNS delivers notifications; EventBridge routes events to targets.</li>
+<li>SCPs never grant permissions (they only set the ceiling) and <b>don't apply to the management account</b>.</li>
+<li>Consolidated billing = one bill + pooled discounts.</li>
+<li>Trusted Advisor = best-practice checks across 5 categories; Health = outages affecting you.</li></ul></div>
+
+<h2>7. Quiz</h2>
+<details><summary>1. Who deleted the S3 bucket yesterday?</summary>CloudTrail.</details>
+<details><summary>2. Notify me when CPU stays over 80%?</summary>CloudWatch alarm → SNS.</details>
+<details><summary>3. Detect when a security group is changed to allow 0.0.0.0/0 on port 22, and check compliance over time?</summary>AWS Config (rule), with CloudTrail showing who made the change.</details>
+<details><summary>4. Prevent all accounts in the organization from using a certain Region?</summary>An SCP in AWS Organizations.</details>
+<details><summary>5. Where do you see recommendations to cut cost and close security gaps?</summary>AWS Trusted Advisor.</details>
+<details><summary>6. Which metric isn't collected for EC2 without an agent?</summary>Memory (RAM) utilization.</details>
+<details><summary>7. What gives you a single bill for many accounts?</summary>Consolidated billing in AWS Organizations.</details>
+
+<h2>8. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Alarm fired and emailed me</label></li>
+<li><label><input type="checkbox" data-id="b"> Found my own RunInstances event in CloudTrail</label></li>
+<li><label><input type="checkbox" data-id="c"> Can state the one-line purpose of CloudWatch / CloudTrail / Config</label></li>
+<li><label><input type="checkbox" data-id="d"> Cleaned up alarms, trail, Config, instance</label></li>
+</ul>

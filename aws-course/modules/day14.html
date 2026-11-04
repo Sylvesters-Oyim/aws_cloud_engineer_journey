@@ -1,0 +1,98 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 14 - Billing, Support, Well-Architected and Week 2 Review</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day14">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 14</span><span class="badge">Review · Quiz · Mini-project</span><span class="badge">⏱ 2–4h</span></p><h1>Billing, Support, Well-Architected and Week 2 Review</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Control and forecast your AWS spend, choose the right support plan, describe the six Well-Architected pillars, score yourself on a 20-question exam-style quiz, and ship a mini-project that proves Week 2 skills.</div>
+
+<h2>1. Money: how AWS billing actually works</h2>
+<p>Three pricing principles: <b>pay as you go</b>, <b>save when you commit</b> (Day 7), and <b>pay less as you use more</b> (tiered pricing, e.g. S3 gets cheaper per GB at volume). Data <b>into</b> AWS is generally free; data <b>out</b> to the internet and between Regions is charged.</p>
+<table><tr><th>Tool</th><th>Use it to</th></tr>
+<tr><td>Pricing Calculator</td><td>Estimate cost <i>before</i> building (you did this on Day 1)</td></tr>
+<tr><td>Billing & Cost Management console</td><td>See this month's bill</td></tr>
+<tr><td>Cost Explorer</td><td>Graph past spend, filter by service/tag, forecast</td></tr>
+<tr><td>Budgets</td><td>Alert (or act) when actual/forecast cost crosses a threshold</td></tr>
+<tr><td>Cost and Usage Report (CUR)</td><td>The most detailed billing data, delivered to S3</td></tr>
+<tr><td>Cost allocation tags</td><td>Label resources (<code>project=blog</code>) to see cost per project</td></tr>
+<tr><td>Consolidated billing (Organizations)</td><td>One bill; combined volume discounts</td></tr></table>
+<div class="box analogy"><b class="t">Analogy: phone plan</b>Budgets = text message "you've used 80% of your data". Cost Explorer = the usage graph in your phone app. Tags = labelling each family member's line so you know who used what. Calculator = comparing plans before signing up.</div>
+
+<h2>2. Help: AWS Support plans</h2>
+<table><tr><th>Plan</th><th>Who</th><th>Key features</th></tr>
+<tr><td><b>Basic</b></td><td>Everyone, free</td><td>Docs, forums, Health Dashboard, limited Trusted Advisor</td></tr>
+<tr><td><b>Developer</b></td><td>Learners, experiments</td><td>Business-hours email to Cloud Support Associates</td></tr>
+<tr><td><b>Business</b></td><td>Production workloads</td><td>24/7 phone/chat/email; full Trusted Advisor; &lt;1 hour for urgent production issues</td></tr>
+<tr><td><b>Enterprise On-Ramp</b></td><td>Business-critical</td><td>Pool of Technical Account Managers, faster response</td></tr>
+<tr><td><b>Enterprise</b></td><td>Large mission-critical</td><td>Designated <b>TAM</b> (Technical Account Manager), &lt;15 min for critical issues, Infrastructure Event Management</td></tr></table>
+<div class="box warn"><b class="t">Check for updates</b>AWS has been revising its paid support offerings. Read the current plan names at <code>aws.amazon.com/premiumsupport/plans</code> before your exam date, but remember the older five-plan table above. Exam question banks still use it.</div>
+
+<h2>3. Design: the Well-Architected Framework (six pillars)</h2>
+<figure>
+<svg viewBox="0 0 700 170" role="img" aria-label="Six Well-Architected pillars">
+<g font-size="13" text-anchor="middle">
+<rect class="a" x="10" y="20" width="104" height="110" rx="8"/><text x="62" y="70">Operational</text><text x="62" y="88">Excellence</text>
+<rect class="c" x="124" y="20" width="104" height="110" rx="8"/><text x="176" y="80">Security</text>
+<rect class="a" x="238" y="20" width="104" height="110" rx="8"/><text x="290" y="80">Reliability</text>
+<rect class="c" x="352" y="20" width="104" height="110" rx="8"/><text x="404" y="70">Performance</text><text x="404" y="88">Efficiency</text>
+<rect class="a" x="466" y="20" width="104" height="110" rx="8"/><text x="518" y="70">Cost</text><text x="518" y="88">Optimization</text>
+<rect class="c" x="580" y="20" width="104" height="110" rx="8"/><text x="632" y="80">Sustainability</text>
+</g><text x="10" y="156" font-size="12" class="m">Review with the free AWS Well-Architected Tool in the console.</text></svg><figcaption>Six questions to ask of any design.</figcaption></figure>
+<ul><li><b>Operational Excellence</b>: automate, learn from failures. <b>Security</b>: least privilege, encrypt, trace. <b>Reliability</b>: recover from failure, scale horizontally. <b>Performance Efficiency</b>: right tools, experiment. <b>Cost Optimization</b>: pay for what you need. <b>Sustainability</b>: minimise environmental impact.</li></ul>
+<p>Also know the <b>Cloud Adoption Framework (CAF)</b> (people/process/platform perspectives for moving to cloud) and the <b>6 Rs of migration</b>: Rehost, Replatform, Repurchase, Refactor, Retire, Retain.</p>
+
+<h2>4. Mini-project (60–90 min): "Secure personal site"</h2>
+<p>Combine Week 1 + 2: host your portfolio page (copy of your repo's <code>index.html</code>) on a <b>private S3 bucket behind CloudFront (HTTPS)</b>, encrypt the bucket with SSE-KMS or SSE-S3, make sure CloudTrail records it, and add a <b>Budget</b> alarm of US$5. Document it as <code>aws-course/labs/week2-secure-site.md</code> with: an architecture diagram you draw (draw.io or hand-drawn photo), the steps, what broke, and the screenshot of the working HTTPS site. This file is a portfolio piece.</p>
+<ol class="steps">
+<li>Repeat the Day 11 setup. Add a custom error page (<code>error.html</code>) and set the CloudFront error response to show it for 403/404.</li>
+<li>Turn on <b>CloudFront standard logging</b> or note that you've seen the metrics in the distribution's Monitoring tab.</li>
+<li>Budgets → Create → Cost budget → Monthly US$5 → alert at 80% actual → your email.</li>
+<li>Write the doc, commit, and then <b>tear everything down</b> (keep the doc and screenshot).</li></ol>
+
+<h2>5. Week 2 exam-style quiz (20 questions, 30 min, no notes)</h2>
+<details><summary>1. Which CIDR gives the most addresses: /16, /24, /28?</summary>/16.</details>
+<details><summary>2. How many IPs does AWS reserve in each subnet?</summary>5.</details>
+<details><summary>3. Component that lets a VPC reach the internet?</summary>Internet gateway (plus route and public IP).</details>
+<details><summary>4. Private instances need outbound internet only. Use?</summary>NAT gateway in a public subnet.</details>
+<details><summary>5. Stateful instance-level firewall?</summary>Security group.</details>
+<details><summary>6. Block a single IP subnet-wide?</summary>NACL deny rule.</details>
+<details><summary>7. Route 53 routing policy for DR?</summary>Failover.</details>
+<details><summary>8. Reduce latency for global static content?</summary>CloudFront.</details>
+<details><summary>9. Service that stores and rotates database credentials?</summary>Secrets Manager.</details>
+<details><summary>10. Service that detects suspicious account activity?</summary>GuardDuty.</details>
+<details><summary>11. DDoS protection included by default?</summary>Shield Standard.</details>
+<details><summary>12. Who is responsible for patching the guest OS of EC2?</summary>The customer.</details>
+<details><summary>13. Which service records API calls?</summary>CloudTrail.</details>
+<details><summary>14. Alert when estimated spend passes US$50?</summary>AWS Budgets.</details>
+<details><summary>15. One bill for 20 accounts?</summary>AWS Organizations (consolidated billing).</details>
+<details><summary>16. Support plan with a designated TAM?</summary>Enterprise.</details>
+<details><summary>17. Which pillar covers “design for failure and recover quickly”?</summary>Reliability.</details>
+<details><summary>18. Scan EC2 instances for software vulnerabilities?</summary>Amazon Inspector.</details>
+<details><summary>19. Where do you download compliance reports?</summary>AWS Artifact.</details>
+<details><summary>20. Which is cheaper for batch jobs that can be interrupted?</summary>Spot Instances.</details>
+<p><b>Scoring:</b> 17+ = book the exam date. 14–16 = reread weak days. Below 14 = redo the labs for those topics.</p>
+
+<h2>6. Weekend wrap-up: commit your progress</h2>
+<pre><code>cd ~/aws_cloud_engineer_journey
+git checkout -b week-2-notes
+# add notes/labs/evidence (screenshots with account IDs blurred, no keys)
+git add aws-course
+git diff --staged | grep -i -E "AKIA|secret|BEGIN RSA" &amp;&amp; echo "STOP: secrets found!"
+git commit -m "Week 2 complete: VPC, firewalls, CloudFront, KMS, monitoring"
+git push -u origin week-2-notes</code></pre>
+<p>Update the progress table in the main <code>README.md</code> and write 5 sentences of reflection. <b>Next week (Week 3):</b> databases and storage deep dive (RDS, DynamoDB, S3 classes, EFS), plus a full CLF-C02 practice test.</p>
+
+<h2>7. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Created a US$5 budget alert</label></li>
+<li><label><input type="checkbox" data-id="b"> Quiz ≥ 17/20</label></li>
+<li><label><input type="checkbox" data-id="c"> Mini-project doc + screenshot committed</label></li>
+<li><label><input type="checkbox" data-id="d"> Everything torn down, billing shows zero running resources</label></li>
+</ul>
+<nav class="pn"><a href="day13.html">← Day 13: Watching and Governing: CloudWatch, CloudTrail, Config, Organizations (Weekend Lab)</a><a href="../index.html">Course home →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

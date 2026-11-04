@@ -1,0 +1,77 @@
+<!--meta {"n":12,"title":"Protecting Data and Apps: KMS and the Security Toolbox","time":"2h","week":2,"tag":"Security · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Encrypt and decrypt data with a KMS key from the CLI, explain "envelope encryption" simply, and match any security scenario to the right AWS service: Shield, WAF, GuardDuty, Inspector, Macie, Secrets Manager, Cognito, Artifact. This is 30% of the Cloud Practitioner exam.</div>
+
+<h2>1. First principles: lock, key, and who holds the key</h2>
+<p>Encryption scrambles data so it's useless without a key. Two situations: <b>at rest</b> (sitting on a disk or in S3) and <b>in transit</b> (travelling over a network, protected by TLS/HTTPS). The hard part is never the maths. It's <b>protecting the keys</b>.</p>
+<p><b>AWS KMS (Key Management Service)</b> creates and guards your keys inside hardware security modules. You never see the raw key; you ask KMS to encrypt or decrypt, and IAM + <b>key policies</b> decide who may ask. Every use is logged to CloudTrail.</p>
+<div class="box analogy"><b class="t">Analogy: the bank safe-deposit room</b>The <b>KMS key</b> is the master key kept in the bank vault; it never leaves. You hand the clerk a small box (data) and say "lock this". For big cargo, you use <b>envelope encryption</b>: lock the cargo with a throw-away <i>data key</i>, then ask the bank to lock <i>that small key</i> with the master key. You store the locked cargo and the locked key together. S3, EBS and RDS do exactly this for you.</div>
+<figure>
+<svg viewBox="0 0 700 200" role="img" aria-label="Envelope encryption flow">
+<rect class="b" x="10" y="70" width="110" height="54" rx="8"/><text x="28" y="102" font-size="14">Your data</text>
+<rect class="a" x="190" y="20" width="140" height="54" rx="8"/><text x="204" y="44" font-size="13">KMS master key</text><text x="204" y="62" font-size="11" class="m">never leaves KMS</text>
+<rect class="b" x="190" y="120" width="140" height="54" rx="8"/><text x="204" y="144" font-size="13">Data key (temp)</text><text x="204" y="162" font-size="11" class="m">encrypts your data</text>
+<rect class="c" x="420" y="60" width="260" height="84" rx="8"/><text x="436" y="86" font-size="13" font-weight="700">Stored together</text><text x="436" y="108" font-size="12">encrypted data + encrypted data key</text><text x="436" y="126" font-size="11" class="m">Only KMS can unlock the data key.</text>
+<path class="l" d="M120 97 H190"/><path class="l" d="M260 74 V120"/><path class="l" d="M330 147 H380 V110 H420"/>
+</svg><figcaption>Big data is encrypted by a small data key; KMS protects that key.</figcaption></figure>
+
+<h2>2. The security toolbox (learn by "what's the threat?")</h2>
+<table><tr><th>Threat / need</th><th>Service</th><th>One-line meaning</th></tr>
+<tr><td>DDoS attack</td><td><b>Shield</b> (Standard free; Advanced paid)</td><td>Absorbs floods of fake traffic</td></tr>
+<tr><td>SQL injection, bad bots, block countries</td><td><b>WAF</b></td><td>Firewall for web requests (Layer 7), attaches to CloudFront/ALB/API Gateway</td></tr>
+<tr><td>"Is something malicious happening in my account?"</td><td><b>GuardDuty</b></td><td>Threat detection by analysing logs (CloudTrail, VPC flow, DNS)</td></tr>
+<tr><td>Vulnerable software on servers/containers</td><td><b>Inspector</b></td><td>Automated vulnerability scanning</td></tr>
+<tr><td>Sensitive data (PII) in S3</td><td><b>Macie</b></td><td>ML finds personal data in buckets</td></tr>
+<tr><td>Store DB passwords/API keys, rotate them</td><td><b>Secrets Manager</b></td><td>Managed secrets with auto-rotation (Parameter Store is the cheaper basic option)</td></tr>
+<tr><td>Sign-up / log-in for your app's users</td><td><b>Cognito</b></td><td>User pools & social login</td></tr>
+<tr><td>Download compliance reports (SOC, ISO)</td><td><b>Artifact</b></td><td>On-demand audit reports & agreements</td></tr>
+<tr><td>Central view of security findings</td><td><b>Security Hub</b></td><td>Aggregates findings and checks best practice</td></tr>
+<tr><td>Manage TLS certificates</td><td><b>ACM</b></td><td>Free public certificates, auto-renew</td></tr>
+<tr><td>Investigate root cause of an incident</td><td><b>Detective</b></td><td>Graphs relationships across logs</td></tr></table>
+
+<h2>3. Lab: encrypt something yourself (45 min)</h2>
+<div class="box warn"><b class="t">Cost</b>A customer managed KMS key costs about US$1/month (pro-rated per hour). Deleting needs a 7-day waiting period, so cost is a few cents. Do the cleanup step at the end.</div>
+<ol class="steps">
+<li><b>Create a key:</b> KMS → Customer managed keys → Create key → Symmetric → Alias <code>lab-key</code> → keep you as administrator and user. Finish.</li>
+<li><b>Encrypt from the CLI:</b>
+<pre><code>echo "my secret plan" &gt; secret.txt
+aws kms encrypt --key-id alias/lab-key \
+  --plaintext fileb://secret.txt \
+  --query CiphertextBlob --output text | base64 --decode &gt; secret.enc
+cat secret.enc          # unreadable garbage
+aws kms decrypt --ciphertext-blob fileb://secret.enc \
+  --query Plaintext --output text | base64 --decode</code></pre>
+You get your sentence back. Notice <code>decrypt</code> never asked which key: the key ID is embedded in the ciphertext.</li>
+<li><b>Prove IAM controls the key:</b> in the key's page, remove yourself from the <i>Key users</i> (or use a limited IAM user). Retry decrypt — <code>AccessDeniedException</code>. Add yourself back.</li>
+<li><b>Encrypt S3 data:</b> create a bucket, Properties → Default encryption → <b>SSE-KMS</b> → choose <code>lab-key</code>. Upload a file, open it: the object details show the KMS key ARN. (SSE-S3 is the free default; SSE-KMS gives audit and control.)</li>
+<li><b>Audit trail:</b> CloudTrail → Event history → filter <i>Event source = kms.amazonaws.com</i>. Find your <code>Encrypt</code>/<code>Decrypt</code> calls. This is why regulators like KMS.</li>
+<li><b>Tour (5 min each, don't enable paid tiers):</b> open GuardDuty, Inspector, Macie and Security Hub consoles and read what the "Get started" page says. Open <b>AWS Artifact</b> and download any report. Read the Shield "Protection" page.</li>
+<li><b>Cleanup:</b> delete the test bucket and objects; KMS → key → <b>Schedule key deletion</b> (7 days). Delete local <code>secret.*</code> files. Don't commit them.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day12-kms-decrypt.png</code> and <code>evidence/day12-cloudtrail-kms.png</code></div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Encryption at rest: KMS/S3/EBS. In transit: TLS (ACM certificates).</li>
+<li><b>Keys aren't deleted instantly</b>; there's a 7–30 day waiting period. AWS-managed keys rotate yearly automatically; customer-managed rotation is optional.</li>
+<li>Shield = DDoS. WAF = web exploits. GuardDuty = threat detection. Inspector = vulnerabilities. Macie = sensitive data.</li>
+<li>Secrets Manager = rotating credentials; Parameter Store = config/secrets, cheaper.</li>
+<li>Root user: lock away with MFA; use it only for the few tasks that require it.</li>
+<li>Penetration testing on your own resources is allowed for many services without prior approval (check the policy).</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>1. Which service finds credit-card numbers stored in S3?</summary>Amazon Macie.</details>
+<details><summary>2. A DDoS attack hits your website. Which service is included free for all customers?</summary>AWS Shield Standard.</details>
+<details><summary>3. Block SQL-injection attempts at the CloudFront layer?</summary>AWS WAF.</details>
+<details><summary>4. Where do you find AWS's SOC and ISO audit reports?</summary>AWS Artifact.</details>
+<details><summary>5. Automatically rotate a database password every 30 days?</summary>AWS Secrets Manager.</details>
+<details><summary>6. Detect crypto-mining or unusual API calls in your account?</summary>Amazon GuardDuty.</details>
+<details><summary>7. Who can see the plaintext KMS master key?</summary>Nobody. It never leaves KMS hardware.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Encrypted and decrypted with KMS from the CLI</label></li>
+<li><label><input type="checkbox" data-id="b"> Found KMS events in CloudTrail</label></li>
+<li><label><input type="checkbox" data-id="c"> Scheduled key deletion, removed local secret files</label></li>
+<li><label><input type="checkbox" data-id="d"> Can name the service for each threat without looking</label></li>
+</ul>

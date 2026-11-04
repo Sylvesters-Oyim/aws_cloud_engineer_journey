@@ -1,0 +1,73 @@
+<!--meta {"n":8,"title":"VPC Part 1: Your Private Network and IP Addresses","time":"1.5–2h","week":2,"tag":"Networking · Concepts · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Explain what a VPC and a subnet are, read a CIDR block like <code>10.0.0.0/16</code>, calculate how many addresses it holds, and inspect the default VPC that your Day 5 server has been living in all along.</div>
+
+<h2>1. First principles: why does a cloud need its own network?</h2>
+<p>On Day 5 you launched a server and it "just worked". It worked because AWS quietly placed it inside a network called the <b>default VPC</b>. But when ten teams share one AWS Region, each needs a private, fenced-off network, otherwise everyone's servers could talk to everyone else's. A <b>VPC (Virtual Private Cloud)</b> is your own private network inside AWS, where <i>you</i> choose the IP address range, who may enter, and who may leave.</p>
+<div class="box analogy"><b class="t">Analogy: an estate with compounds</b>A <b>VPC</b> is a gated estate you own inside a huge city (the Region). <b>Subnets</b> are separate compounds inside the estate (a front compound for visitors, a back compound for family). <b>IP addresses</b> are house numbers. <b>Route tables</b> are the signposts that say which road leads out. <b>Gates</b> (internet gateway) let traffic in and out. You'll meet each of these this week.</div>
+
+<h2>2. IP addresses and CIDR in 10 minutes</h2>
+<p>Every device on a network needs an address. An IPv4 address is 32 bits, written as four numbers: <code>10.0.1.25</code>. A <b>CIDR block</b> describes a <i>whole range</i> of addresses with a slash number: <code>10.0.0.0/16</code>.</p>
+<p>The number after the slash says how many of the 32 bits are <b>fixed</b> (the street name). The remaining bits are free (the house numbers):</p>
+<pre><code>addresses in a block = 2 ^ (32 - prefix)
+
+/16  -> 2^16 = 65,536 addresses   (10.0.0.0   to 10.0.255.255)
+/24  -> 2^8  =    256 addresses   (10.0.1.0   to 10.0.1.255)
+/28  -> 2^4  =     16 addresses   (smallest subnet AWS allows)</code></pre>
+<p>Smaller slash number = bigger network. AWS allows a VPC between <code>/16</code> and <code>/28</code>. Use <b>private ranges</b> (not routable on the public internet): <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>.</p>
+<div class="box warn"><b class="t">AWS reserves 5 addresses per subnet</b>In every subnet AWS takes the first four and the last one (network address, VPC router, DNS, future use, broadcast). So a <code>/24</code> gives <b>251</b> usable addresses, not 256. This is a classic exam question.</div>
+
+<figure>
+<svg viewBox="0 0 700 270" role="img" aria-label="A VPC 10.0.0.0/16 holding two subnets">
+<rect class="c" x="20" y="16" width="660" height="240" rx="12"/><text x="36" y="42" font-weight="700">VPC  10.0.0.0/16  (65,536 addresses)</text>
+<rect class="a" x="44" y="62" width="300" height="170" rx="8"/><text x="60" y="88" font-weight="700" font-size="14">Subnet A  10.0.1.0/24</text><text x="60" y="108" font-size="12" class="m">AZ eu-west-1a · 251 usable</text>
+<rect class="b" x="60" y="126" width="110" height="34" rx="5"/><text x="72" y="148" font-size="12">10.0.1.10 web</text><rect class="b" x="184" y="126" width="110" height="34" rx="5"/><text x="196" y="148" font-size="12">10.0.1.11 web</text>
+<rect class="a" x="366" y="62" width="300" height="170" rx="8"/><text x="382" y="88" font-weight="700" font-size="14">Subnet B  10.0.2.0/24</text><text x="382" y="108" font-size="12" class="m">AZ eu-west-1b · 251 usable</text>
+<rect class="b" x="382" y="126" width="110" height="34" rx="5"/><text x="394" y="148" font-size="12">10.0.2.10 db</text>
+<text x="60" y="206" font-size="12" class="m">Rule: a subnet lives in exactly ONE Availability Zone.</text>
+</svg><figcaption>The VPC is the whole estate; each subnet is a slice of the address range pinned to one AZ.</figcaption></figure>
+
+<h3>The pieces, in one table</h3>
+<table><tr><th>Piece</th><th>What it is</th><th>Scope</th></tr>
+<tr><td>VPC</td><td>Your private network, with a CIDR range</td><td>One Region</td></tr>
+<tr><td>Subnet</td><td>A slice of the VPC range</td><td>One AZ</td></tr>
+<tr><td>Route table</td><td>Rules that say where traffic goes next</td><td>Attached to subnets</td></tr>
+<tr><td>Internet gateway</td><td>Door between your VPC and the internet</td><td>Attached to a VPC</td></tr>
+<tr><td>Security group / NACL</td><td>Firewalls (Day 10)</td><td>Instance / subnet</td></tr></table>
+
+<h2>3. Lab: explore the default VPC and do CIDR maths</h2>
+<ol class="steps">
+<li>Console → search <b>VPC</b> → <b>Your VPCs</b>. You'll see one marked <i>Default VPC: Yes</i> with CIDR <code>172.31.0.0/16</code>. Note it exists in <b>every Region</b>.</li>
+<li>Click <b>Subnets</b>. How many are there? (One per AZ.) Write down the CIDR and AZ of each. Are they all <code>/20</code>?</li>
+<li>Click <b>Route tables</b> → the main one → <b>Routes</b> tab. Find the line <code>0.0.0.0/0 → igw-xxxx</code>. That line is what makes default subnets "public". Tomorrow you'll create it yourself.</li>
+<li>Do the same from the terminal (CloudShell or your CLI profile):
+<pre><code>aws ec2 describe-vpcs --query 'Vpcs[].[VpcId,CidrBlock,IsDefault]' --output table
+aws ec2 describe-subnets --query 'Subnets[].[SubnetId,CidrBlock,AvailabilityZone,MapPublicIpOnLaunch]' --output table</code></pre></li>
+<li><b>Paper exercise</b> (no AWS needed). Design a VPC <code>10.0.0.0/16</code> for a company with 3 tiers (web, app, database) across 2 AZs. Give each of the 6 subnets a <code>/24</code>: <code>10.0.1.0/24</code> through <code>10.0.6.0/24</code>. Draw it. You will build exactly this in Week 5.</li>
+<li>Practice: how many usable addresses in a <code>/20</code>? Answer: 2<sup>12</sup> = 4096, minus 5 = <b>4091</b>.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day08-default-vpc.png</code> (VPC list + subnet list) and a photo of your paper design.</div>
+<div class="box warn"><b class="t">Cost</b>Everything today is free. VPCs, subnets and route tables cost nothing. Only things like NAT gateways and public IPv4 addresses cost money, and we'll point them out.</div>
+
+<h2>4. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>VPC = Regional. Subnet = one AZ. Never spans AZs.</li>
+<li>CIDR range of a VPC: <code>/16</code> (largest) to <code>/28</code> (smallest).</li>
+<li>5 reserved IPs per subnet.</li>
+<li>A default VPC exists per Region so you can launch instantly.</li>
+<li>"Public subnet" means: its route table has a route to an internet gateway. The subnet itself isn't magical.</li></ul></div>
+
+<h2>5. Quiz</h2>
+<details><summary>1. Which can span multiple AZs: a VPC or a subnet?</summary>A VPC spans all AZs in a Region. A subnet lives in exactly one AZ.</details>
+<details><summary>2. How many addresses in <code>10.0.0.0/24</code>? How many are usable in AWS?</summary>256 total, 251 usable.</details>
+<details><summary>3. Which is bigger: /16 or /24?</summary>/16 (65,536 vs 256 addresses). Smaller prefix number = bigger network.</details>
+<details><summary>4. What makes a subnet "public"?</summary>A route to an internet gateway in its route table.</details>
+<details><summary>5. A company needs its servers isolated from other AWS customers. Which service?</summary>Amazon VPC.</details>
+
+<h2>6. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Found the default VPC and its subnets</label></li>
+<li><label><input type="checkbox" data-id="b"> Can compute addresses from a CIDR prefix</label></li>
+<li><label><input type="checkbox" data-id="c"> Drew the 6-subnet design on paper</label></li>
+<li><label><input type="checkbox" data-id="d"> Quiz ≥ 4/5</label></li>
+</ul>

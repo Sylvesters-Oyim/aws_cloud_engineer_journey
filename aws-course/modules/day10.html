@@ -1,0 +1,89 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Day 10 - Firewalls: Security Groups, NACLs and Session Manager</title><link rel="stylesheet" href="../assets/style.css"></head><body data-k="aws-day10">
+<header class="top"><div class="wrap"><a href="../index.html">☁ AWS Cloud Engineer Journey</a><span style="color:var(--mut);font-size:14px">Beginner → Cloud Practitioner → Solutions Architect</span></div></header>
+<main class="wrap"><p style="margin:26px 0 0"><span class="badge">Day 10</span><span class="badge">Security · Networking · Lab</span><span class="badge">⏱ 2h</span></p><h1>Firewalls: Security Groups, NACLs and Session Manager</h1><div class="bar"><i id="pb"></i></div>
+<div class="box why"><b class="t">By the end of today you can</b>
+Control exactly who can talk to which server, explain the difference between security groups and network ACLs, let a database accept traffic only from your web tier, and log in to a server without opening port 22 at all.</div>
+
+<h2>1. First principles: defence in depth</h2>
+<p>A castle isn't protected by one wall. It has a moat, an outer wall, and a guard at each door. AWS gives you two firewall layers, plus smart ways to log in without leaving a door open.</p>
+<div class="box analogy"><b class="t">Analogy: estate security</b>The <b>NACL</b> is the estate-gate guard checking a rule list for everyone entering <i>and</i> leaving the compound (subnet). The <b>security group</b> is the bouncer at each individual house (instance), who remembers who you came in with and lets them back out without re-checking.</div>
+<table>
+<tr><th></th><th>Security Group (SG)</th><th>Network ACL (NACL)</th></tr>
+<tr><td>Protects</td><td>An instance (its network interface)</td><td>A whole subnet</td></tr>
+<tr><td>Rules</td><td><b>Allow only</b></td><td>Allow <b>and Deny</b></td></tr>
+<tr><td>State</td><td><b>Stateful</b>: reply traffic is automatically allowed</td><td><b>Stateless</b>: you must allow the reply traffic too (ephemeral ports 1024–65535)</td></tr>
+<tr><td>Evaluation</td><td>All rules together</td><td>Rules in numbered order, first match wins</td></tr>
+<tr><td>Default</td><td>Deny all inbound, allow all outbound</td><td>Default NACL allows all</td></tr>
+<tr><td>Use for</td><td>Day-to-day control (90% of cases)</td><td>Subnet-wide blocks, e.g. blocking a bad IP range</td></tr></table>
+
+<figure>
+<svg viewBox="0 0 700 230" role="img" aria-label="Layered firewalls: internet to NACL to security group to instance">
+<rect class="b" x="10" y="85" width="86" height="56" rx="10"/><text x="24" y="118" font-size="14">Internet</text>
+<rect class="c" x="130" y="20" width="420" height="190" rx="12" stroke-dasharray="6 4"/><text x="146" y="44" font-weight="700" font-size="13">Subnet — NACL (stateless, allow + deny)</text>
+<rect class="a" x="170" y="64" width="340" height="130" rx="10"/><text x="186" y="88" font-weight="700" font-size="13">Security group (stateful, allow only)</text>
+<rect class="b" x="200" y="108" width="130" height="64" rx="8"/><text x="222" y="145" font-size="13">EC2 server</text>
+<rect class="b" x="350" y="108" width="140" height="64" rx="8"/><text x="372" y="145" font-size="13">EC2 server 2</text>
+<path class="l" d="M96 113 H170"/><text x="580" y="116" font-size="12" class="m">Both must say “yes”</text><text x="580" y="134" font-size="12" class="m">for traffic to arrive</text>
+</svg><figcaption>Traffic must pass the subnet's NACL and then the instance's security group.</figcaption></figure>
+
+<h3>The killer feature: security groups can reference each other</h3>
+<p>Instead of hard-coding IP addresses, a rule can say "allow port 3306 from <b>anything in the web-sg group</b>". Servers can be added, removed or replaced and the rule still works. This is how real 3-tier apps are locked down.</p>
+<pre><code>web-sg : inbound 80 from 0.0.0.0/0
+db-sg  : inbound 3306 from web-sg   &lt;- NOT from the internet, only from web servers</code></pre>
+
+<h3>Logging in without port 22: Systems Manager Session Manager</h3>
+<p>SSH needs port 22 open and a key file to protect. <b>Session Manager</b> gives you a browser or CLI shell instead, authenticated by IAM, with <b>no inbound ports</b> and every session loggable. It needs: (1) the SSM agent (preinstalled on Amazon Linux 2023), (2) an <b>IAM role</b> with the policy <code>AmazonSSMManagedInstanceCore</code> attached to the instance, and (3) a network path to the SSM service (internet gateway, NAT, or VPC endpoints).</p>
+
+<h2>2. Lab: a locked-down two-tier setup (75 min)</h2>
+<p>Re-create the Day 9 VPC quickly with the wizard: <b>VPC → Create VPC → VPC and more</b>, name <code>lab</code>, 1 AZ, 1 public + 1 private subnet, <b>NAT gateways: None</b>, VPC endpoints: None. (This reuses everything you learned, in one click.)</p>
+<ol class="steps">
+<li><b>Create the IAM role:</b> IAM → Roles → Create → AWS service → EC2 → attach <code>AmazonSSMManagedInstanceCore</code> → name <code>lab-ssm-role</code>.</li>
+<li><b>Create security groups</b> in the lab VPC. <code>web-sg</code>: inbound HTTP 80 from <code>0.0.0.0/0</code>, <b>no SSH rule</b>. <code>app-sg</code>: inbound <b>Custom TCP 8080 with source = web-sg</b> (pick the group from the dropdown).</li>
+<li><b>Launch the web server</b> in the public subnet with <code>web-sg</code>, auto-assign public IP on, IAM instance profile <code>lab-ssm-role</code>, and the same nginx user-data as Day 9.</li>
+<li><b>Launch the private "app" server</b> in the private subnet with <code>app-sg</code>, no public IP. User data (Python is preinstalled, so no internet is needed):
+<pre><code>#!/bin/bash
+mkdir -p /srv/app &amp;&amp; echo "secret internal app" &gt; /srv/app/index.html
+cd /srv/app &amp;&amp; nohup python3 -m http.server 8080 &amp;</code></pre></li>
+<li><b>Log in with Session Manager:</b> EC2 → select web server → <b>Connect</b> → <i>Session Manager</i> tab → Connect. (If the button is greyed out, wait 2–3 minutes, then confirm the role is attached.) You're in with <b>zero open ports</b>.</li>
+<li>From that shell, test the private server (use its private IP from the console):
+<pre><code>curl http://10.0.x.x:8080          # works: web-sg is allowed by app-sg
+curl --max-time 5 http://10.0.x.x:22   # not allowed: times out</code></pre></li>
+<li><b>Prove the firewall:</b> from your laptop, try to reach the app server — impossible (no public IP, no route, no rule). Then edit <code>app-sg</code>, remove the 8080 rule, rerun the curl from the web server: it now times out. Add it back. You just watched a security group work.</li>
+<li><b>Try a NACL:</b> VPC → Network ACLs → the lab's one → Inbound → Add rule #50: HTTP 80, source your public IP/32, <b>Deny</b>. Reload the web page: blocked, even though the security group allows it. Delete the rule. (Lower rule number wins.)</li>
+<li><b>Cleanup:</b> terminate both instances → delete the VPC (the wizard-built VPC removes its subnets/IGW/route tables for you) → delete the two SGs if they remain.</li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day10-session-manager.png</code> (the shell) and <code>evidence/day10-sg-reference.png</code> (app-sg with source = web-sg)</div>
+
+<h2>3. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>SG = stateful, allow-only, instance level. NACL = stateless, allow+deny, subnet level.</li>
+<li>To <b>block one specific IP</b> you need a NACL (SGs can't deny).</li>
+<li>Prefer SG-to-SG references over IP ranges.</li>
+<li>Session Manager = shell access with IAM auth and audit logs, no SSH keys or open ports.</li>
+<li>Shared responsibility: the SG rules are <b>your</b> job, the hypervisor is AWS's.</li>
+<li>Also in scope: AWS Network Firewall (managed deep inspection), Inspector (vulnerability scans), VPC Flow Logs (who talked to whom).</li></ul></div>
+
+<h2>4. Quiz</h2>
+<details><summary>1. Which firewall is stateless?</summary>The network ACL.</details>
+<details><summary>2. You need to block a malicious IP address from reaching your whole subnet. Which tool?</summary>A NACL deny rule.</details>
+<details><summary>3. An instance has no inbound rules in its SG. Can it still download updates (with a route)?</summary>Yes. Default outbound is allow all, and replies are allowed (stateful).</details>
+<details><summary>4. Safest way to give a developer shell access to a private instance without opening ports?</summary>Systems Manager Session Manager.</details>
+<details><summary>5. A DB should accept connections only from the web tier. How?</summary>DB security group allows the DB port with the source set to the web tier's security group.</details>
+<details><summary>6. Which record captures accepted/rejected network traffic for troubleshooting?</summary>VPC Flow Logs.</details>
+
+<h2>5. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Logged in with Session Manager, no port 22</label></li>
+<li><label><input type="checkbox" data-id="b"> Saw SG-to-SG reference allow, then deny, traffic</label></li>
+<li><label><input type="checkbox" data-id="c"> Blocked myself with a NACL, then removed it</label></li>
+<li><label><input type="checkbox" data-id="d"> Cleaned up</label></li>
+</ul>
+<nav class="pn"><a href="day09.html">← Day 9: VPC Part 2: Build a Public Subnet and Serve a Website</a><a href="day11.html">Day 11: DNS and CDN: Route 53 and CloudFront →</a></nav></main><script>
+(function(){var k=document.body.dataset.k;function g(){try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}}
+function s(o){try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}}
+var st=g();document.querySelectorAll('input[type=checkbox][data-id]').forEach(function(c){c.checked=!!st[c.dataset.id];
+c.addEventListener('change',function(){var o=g();o[c.dataset.id]=c.checked;s(o);bar()})});
+function bar(){var a=document.querySelectorAll('input[data-id]'),n=0;a.forEach(function(c){if(c.checked)n++});
+var b=document.getElementById('pb');if(b&&a.length)b.style.width=(100*n/a.length)+'%'}bar()})();
+</script></body></html>

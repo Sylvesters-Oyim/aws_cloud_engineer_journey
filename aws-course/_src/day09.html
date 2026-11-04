@@ -1,0 +1,77 @@
+<!--meta {"n":9,"title":"VPC Part 2: Build a Public Subnet and Serve a Website","time":"2h","week":2,"tag":"Networking · Lab"} -->
+<div class="box why"><b class="t">By the end of today you can</b>
+Build a VPC from scratch (subnet, internet gateway, route table), launch a web server into it, and explain exactly how a packet gets from your browser to your server. Also: know when you need a NAT gateway and why it costs money.</div>
+
+<h2>1. First principles: how does traffic find its way?</h2>
+<p>A packet leaving your server only asks one question: <i>"Is the destination inside my VPC, or outside?"</i> The <b>route table</b> answers. Each row says "for destinations matching this CIDR, send to that target".</p>
+<pre><code>Destination     Target
+10.0.0.0/16     local        &lt;- inside the VPC, deliver directly (automatic)
+0.0.0.0/0       igw-0abc123  &lt;- everything else goes out the internet gateway</code></pre>
+<p><code>0.0.0.0/0</code> means "any address". The most specific matching row wins. Without the second row, your subnet is <b>private</b>: it can talk inside the VPC only.</p>
+<div class="box analogy"><b class="t">Analogy: the estate gate</b>The <b>internet gateway (IGW)</b> is the main gate of the estate. It is free, highly available and scales itself. A <b>route table</b> row <code>0.0.0.0/0 → IGW</code> is the signpost "Exit this way". A server also needs a <b>public IP</b>, otherwise outsiders don't know its house number (the IGW translates between the public and private address).</div>
+
+<h3>Public vs private subnet</h3>
+<table><tr><th></th><th>Public subnet</th><th>Private subnet</th></tr>
+<tr><td>Route to IGW</td><td>Yes</td><td>No</td></tr>
+<tr><td>Typical residents</td><td>Load balancers, bastion hosts, web servers</td><td>Databases, app servers</td></tr>
+<tr><td>Reachable from internet</td><td>If it has a public IP + firewall allows</td><td>Never directly</td></tr>
+<tr><td>Outbound internet (updates)</td><td>Via IGW</td><td>Via <b>NAT gateway</b> in a public subnet</td></tr></table>
+<p><b>NAT gateway</b>: lets private servers call <i>out</i> (download patches) but blocks anyone calling <i>in</i>. Like a company switchboard that places outgoing calls for staff but never forwards strangers' calls. It's <b>billed per hour plus per GB</b> (roughly US$30+/month if left on), so it's a top surprise-bill cause.</p>
+
+<figure>
+<svg viewBox="0 0 700 300" role="img" aria-label="Traffic flow from internet through IGW to public subnet, with private subnet using NAT">
+<rect class="b" x="14" y="110" width="90" height="56" rx="10"/><text x="30" y="143" font-size="14">Internet</text>
+<rect class="c" x="170" y="14" width="516" height="272" rx="12"/><text x="186" y="40" font-weight="700">VPC 10.0.0.0/16</text>
+<rect class="a" x="200" y="100" width="64" height="76" rx="8"/><text x="208" y="134" font-size="13">IGW</text><text x="208" y="152" font-size="11" class="m">gate</text>
+<rect class="a" x="300" y="56" width="360" height="100" rx="8"/><text x="314" y="80" font-weight="700" font-size="13">Public subnet 10.0.1.0/24</text><text x="314" y="98" font-size="11" class="m">route: 0.0.0.0/0 → IGW</text>
+<rect class="b" x="314" y="108" width="100" height="36" rx="5"/><text x="326" y="131" font-size="12">Web server</text><rect class="b" x="440" y="108" width="100" height="36" rx="5"/><text x="456" y="131" font-size="12">NAT GW</text>
+<rect class="a" x="300" y="180" width="360" height="90" rx="8"/><text x="314" y="204" font-weight="700" font-size="13">Private subnet 10.0.2.0/24</text><text x="314" y="222" font-size="11" class="m">route: 0.0.0.0/0 → NAT</text>
+<rect class="b" x="314" y="232" width="100" height="30" rx="5"/><text x="332" y="252" font-size="12">Database</text>
+<path class="l" d="M104 138 H200"/><path class="l" d="M264 130 H300"/><path class="l" d="M540 126 H620 V246 H414" stroke-dasharray="5 4"/>
+<text x="432" y="196" font-size="11" class="m"></text>
+</svg><figcaption>Users reach the public web server through the IGW. The private database only goes out through the NAT gateway (dashed), never the reverse.</figcaption></figure>
+
+<h2>2. Lab: build your own VPC by hand (60–75 min)</h2>
+<div class="box warn"><b class="t">Cost safety</b>Skip NAT today (it costs money). You only need one small EC2 instance, and you'll delete everything at the end.</div>
+<ol class="steps">
+<li><b>Create the VPC:</b> VPC → Create VPC → <i>VPC only</i>. Name <code>lab-vpc</code>, IPv4 CIDR <code>10.0.0.0/16</code>. Create.</li>
+<li><b>Create two subnets:</b> Subnets → Create. VPC = lab-vpc. <code>public-a</code> = <code>10.0.1.0/24</code> in AZ <i>a</i>; <code>private-a</code> = <code>10.0.2.0/24</code> in AZ <i>a</i>.</li>
+<li><b>Create an internet gateway:</b> Internet gateways → Create <code>lab-igw</code> → Actions → <b>Attach to VPC</b> → lab-vpc.</li>
+<li><b>Route table for public:</b> Route tables → Create <code>public-rt</code> in lab-vpc. Routes tab → Edit → Add <code>0.0.0.0/0</code> → Internet Gateway → lab-igw. Subnet associations tab → associate <code>public-a</code>.</li>
+<li><b>Auto-assign public IP:</b> Subnets → select <code>public-a</code> → Actions → Edit subnet settings → tick <i>Enable auto-assign public IPv4 address</i>.</li>
+<li><b>Launch a web server:</b> EC2 → Launch instance. Amazon Linux 2023, t2.micro/t3.micro (free-tier eligible one). Network settings → Edit → VPC <code>lab-vpc</code>, subnet <code>public-a</code>. Create a security group allowing <b>HTTP 80 from anywhere</b> (we tighten firewalls tomorrow). Advanced → User data:
+<pre><code>#!/bin/bash
+dnf install -y nginx
+echo "&lt;h1&gt;Hello from my own VPC (Day 9)&lt;/h1&gt;" &gt; /usr/share/nginx/html/index.html
+systemctl enable --now nginx</code></pre></li>
+<li>After 1–2 minutes, open <code>http://&lt;public-ip&gt;</code> in your browser. You should see your page. 🎉 (Use http, not https.)</li>
+<li><b>Break it on purpose</b> (best way to learn): delete the <code>0.0.0.0/0</code> route in <code>public-rt</code> and refresh. The page stops loading. Put the route back. You've just proven that the route table is the gate.</li>
+<li><b>Optional (if time):</b> also launch a tiny instance in <code>private-a</code> with no public IP. Confirm you cannot reach it from the internet. We use it tomorrow.</li>
+<li><b>Cleanup:</b> terminate instances → detach and delete the IGW → delete subnets → delete route table (<code>public-rt</code>) → delete <code>lab-vpc</code>. (If deleting fails, something is still attached: read the error.)<br>
+<small>Tip: the wizard <i>Create VPC → VPC and more</i> builds all this in one click, but now you know what it creates.</small></li>
+</ol>
+<div class="shot">📸 Evidence: <code>evidence/day09-browser-page.png</code> and <code>evidence/day09-route-table.png</code> (showing the IGW route)</div>
+<div class="box warn"><b class="t">Public IPv4 now costs money</b>Since Feb 2024 AWS charges about US$0.005/hour for every public IPv4 address, even on running instances. Small, but another reason to terminate lab servers the same day.</div>
+
+<h2>3. Exam notes</h2>
+<div class="box exam"><b class="t">Remember</b><ul>
+<li>Internet gateway: VPC ↔ internet, free, horizontally scaled. One per VPC.</li>
+<li>NAT gateway: private subnet → internet only. Lives in a <b>public</b> subnet. Costs per hour + per GB. Resides in one AZ (create one per AZ for resilience).</li>
+<li>Route table, not the subnet's name, decides public vs private.</li>
+<li>Egress-only internet gateway = the IPv6 version of NAT (outbound only).</li>
+<li>VPC peering links two VPCs; Transit Gateway links many; VPN/Direct Connect link to on-premises.</li></ul></div>
+
+<h2>4. Quiz</h2>
+<details><summary>1. A server in a private subnet needs to download OS patches but must not accept inbound internet traffic. Use?</summary>A NAT gateway (in a public subnet).</details>
+<details><summary>2. What does <code>0.0.0.0/0</code> mean?</summary>All IPv4 destinations (the default route).</details>
+<details><summary>3. Your web server has a public IP but the page times out. First thing to check among route tables?</summary>Whether the subnet's route table has <code>0.0.0.0/0 → igw</code> (and then the security group).</details>
+<details><summary>4. Is an internet gateway chargeable?</summary>No. NAT gateways are.</details>
+<details><summary>5. Which service connects your corporate data center to AWS over a dedicated private line?</summary>AWS Direct Connect (Site-to-Site VPN uses the internet, encrypted).</details>
+
+<h2>5. Checklist</h2>
+<ul class="check">
+<li><label><input type="checkbox" data-id="a"> Built lab-vpc and loaded a page from it</label></li>
+<li><label><input type="checkbox" data-id="b"> Broke and fixed the route table</label></li>
+<li><label><input type="checkbox" data-id="c"> Deleted all lab resources</label></li>
+<li><label><input type="checkbox" data-id="d"> Quiz ≥ 4/5</label></li>
+</ul>
